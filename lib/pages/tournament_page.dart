@@ -54,6 +54,7 @@ class _TournamentPageState extends ConsumerState<TournamentPage> {
               width: dashboardWidth,  
               margin: const EdgeInsets.all(16),
               padding: const EdgeInsets.all(16),
+              borderRadius: BorderRadius.circular(16),
               child: TournamentPanel(theme: _theme),)
           ],
         ),
