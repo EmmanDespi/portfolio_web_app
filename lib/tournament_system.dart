@@ -2753,10 +2753,26 @@ class _TournamentPanelState extends State<TournamentPanel> {
   }
 
   void _generateNumberedPlayers() {
-    final count = int.tryParse(_playerCountController.text);
-    if (count == null || count < 2 || count > 150) return;
-    _controller.generateNumberedPlayers(count);
+  final count = int.tryParse(_playerCountController.text);
+  if (count == null || count < 2 || count > 150) {
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text("Invalid Player Count"),
+        content: const Text("Number of players must be between 2 and 150."),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(),
+            child: const Text("OK"),
+          ),
+        ],
+      ),
+    );
+    return;
   }
+  _controller.generateNumberedPlayers(count);
+}
+
 
   // NEW: Generate initials from player name
   String _buildInitials(String name, {double size = 24}) {
