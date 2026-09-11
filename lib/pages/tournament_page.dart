@@ -49,12 +49,18 @@ class _TournamentPageState extends ConsumerState<TournamentPage> {
       body: SingleChildScrollView(
         child: Column(
           children: [
+            SizedBox(height: 42),
             WireFrame(
               color: _theme.background2,
               width: dashboardWidth,  
               margin: const EdgeInsets.all(16),
               padding: const EdgeInsets.all(16),
-              borderRadius: BorderRadius.circular(16),
+              boxShadow: BoxShadow(
+                color: AppColors.black,
+                offset: const Offset(-0, 0),
+                blurRadius: 2,
+              ),
+              borderRadius: BorderRadius.circular(12),
               child: TournamentPanel(theme: _theme),)
           ],
         ),

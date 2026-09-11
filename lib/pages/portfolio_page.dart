@@ -166,12 +166,17 @@ class _PortfolioPageState extends State<PortfolioPage> {
       backgroundColor: AppColors.oatcream,
       body: Stack(
         children:[ 
+          
           SingleChildScrollView(
-            child: Column(children: [_buildDashboard(context)]),
+            child: Column(
+              children: [
+              _buildDashboard(context)
+              ]
+            ),
           ),
           if (_showOptions)
           Positioned(
-            bottom: 80,
+            bottom: MediaQuery.of(context).size.height < 1000 ? 100 : 80,
             right: 20,
             child: WireFrame(
               width: 220,
@@ -231,22 +236,22 @@ class _PortfolioPageState extends State<PortfolioPage> {
         : isTablet
         ? screenWidth * 0.7
         : isAlmostMobile
-        ? screenWidth * 0.95
+        ? screenWidth * 0.9
         : screenWidth * 0.5;
     final aboutWidth = isMobile
-        ? dashboardWidth * 0.88
+        ? dashboardWidth * 0.87
         : isAlmostMobile || isTablet
         ? dashboardWidth * 0.45
         : dashboardWidth * 0.6;
     final expWidth = isMobile
-        ? dashboardWidth * 0.88
+        ? dashboardWidth * 0.87
         : isAlmostMobile || isTablet
         ? dashboardWidth * 0.45
         : dashboardWidth * 0.28;
 
     return NeomorphismPanel(
       height: MediaQuery.of(context).size.height,
-      borderRadius: BorderRadius.circular(4),
+      borderRadius: BorderRadius.circular(12),
       padding: EdgeInsets.all(0),
       margin: const EdgeInsets.all(0),
       color: _theme.background,
@@ -255,8 +260,10 @@ class _PortfolioPageState extends State<PortfolioPage> {
         child: SingleChildScrollView(
           padding: const EdgeInsets.fromLTRB(8, 12, 8, 40),
           child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
             children: [
-              WirePanel(
+              SizedBox(height: 42),
+              WireFrame(
                 // border: Border.all(color: Colors.red, width: 1.5),
                 theme: _theme,
                 color: _theme.background2,
@@ -269,9 +276,14 @@ class _PortfolioPageState extends State<PortfolioPage> {
                         MediaQuery.of(context).size.height * 0.1,
                       )
                     : EdgeInsets.all(0),
-                borderRadius: BorderRadius.circular(2),
+                borderRadius: BorderRadius.circular(8),
                 border: Border.all(color: _theme.background2, width: 5),
                 width: dashboardWidth,
+                boxShadow: BoxShadow(
+                  color: AppColors.black,
+                  offset: isAlmostMobile || isMobile ? Offset.zero : Offset(-10, 10),
+                  blurRadius: 2,
+                ),
                 child: Column(
                   mainAxisAlignment: MainAxisAlignment.center,
                   crossAxisAlignment: CrossAxisAlignment.center,
@@ -303,6 +315,11 @@ class _PortfolioPageState extends State<PortfolioPage> {
                                       top: 24,
                                       bottom: 12,
                                     ),
+                                    boxShadow: BoxShadow(
+                                      color: AppColors.black,
+                                      offset:Offset(-3, 3),
+                                      blurRadius: 2,
+                                    ),
                                     width: expWidth,
                                     theme: AppTheme(isDark: _isDark),
                                     child: _buildExperiencePanel(),
@@ -310,6 +327,11 @@ class _PortfolioPageState extends State<PortfolioPage> {
                             WireFrame(
                               color: _theme.surface,
                               padding: const EdgeInsets.all(12),
+                              boxShadow: BoxShadow(
+                                color: AppColors.black,
+                                offset: isAlmostMobile || isMobile ? Offset(-3, 3) : Offset(-10, 10),
+                                blurRadius: 2,
+                              ),
                               width: aboutWidth,
                               theme: AppTheme(isDark: _isDark),
                               child: _buildTechStackData(),
@@ -740,7 +762,7 @@ class _PortfolioPageState extends State<PortfolioPage> {
     bool invertAvatar = false,
   }) {
     final isMobile = MediaQuery.of(context).size.width < 700;
-    final double fontSize = 13.0.clamp(12.0, 16.0);
+    final double fontSize = 13.0.clamp(12.0, 18.0);
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -773,7 +795,7 @@ class _PortfolioPageState extends State<PortfolioPage> {
                     style: TextStyle(
                       color: _theme.textPrimary,
                       fontSize: fontSize,
-                      fontWeight: FontWeight.w300,
+                      fontWeight: FontWeight.w400,
                       letterSpacing: 1.5,
                     ),
                   ),
