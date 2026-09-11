@@ -28,8 +28,22 @@ class _PortfolioPageState extends State<PortfolioPage> {
   @override
   void initState() {
     super.initState();
-    
+    _loadThemePreference();
   }
+
+  Future<void> _loadThemePreference() async {
+  final prefs = await SharedPreferences.getInstance();
+  setState(() {
+    _isDark = prefs.getBool('isDark') ?? false;
+  });
+}
+
+Future<void> _toggleTheme(bool value) async {
+  setState(() => _isDark = value);
+  final prefs = await SharedPreferences.getInstance();
+  await prefs.setBool('isDark', value);
+}
+
 
   @override
   void dispose() {
@@ -180,6 +194,7 @@ class _PortfolioPageState extends State<PortfolioPage> {
             right: 20,
             child: WireFrame(
               width: 220,
+              color: _theme.background,
               padding: const EdgeInsets.all(12),
               boxShadow: BoxShadow(
                 color: AppColors.black,
@@ -188,12 +203,12 @@ class _PortfolioPageState extends State<PortfolioPage> {
               ),
               borderRadius: BorderRadius.circular(12),
               child: Material(
-                type: MaterialType.transparency, // no extra bg/elevation, just enables ink
+                type: MaterialType.transparency,
                 child: Column(
                   mainAxisSize: MainAxisSize.min,
                   children: [
                     ListTile(
-                      leading: const Icon(Icons.emoji_events),
+                      leading: Icon(Icons.emoji_events, color: _theme.textPrimary,),
                       title: Text(
                         "Tournament",
                         style: TextStyle(
@@ -251,7 +266,7 @@ class _PortfolioPageState extends State<PortfolioPage> {
 
     return NeomorphismPanel(
       height: MediaQuery.of(context).size.height,
-      borderRadius: BorderRadius.circular(12),
+      borderRadius: BorderRadius.circular(0),
       padding: EdgeInsets.all(0),
       margin: const EdgeInsets.all(0),
       color: _theme.background,
@@ -493,8 +508,8 @@ class _PortfolioPageState extends State<PortfolioPage> {
                 NeoSwitch(
                   value: _isDark,
                   theme: _theme,
-                  onChanged: (v) => setState(() => _isDark = v),
-                ),
+                  onChanged: _toggleTheme,
+                )
               ],
             ),
           ],
@@ -656,8 +671,8 @@ class _PortfolioPageState extends State<PortfolioPage> {
             ),
             SizedBox(height: 12),
             Wrap(
-              spacing: 30,
-              runSpacing: 30,
+              spacing: 12,
+              runSpacing: 12,
               children: frontEndTechs.map((lang) {
                 return Chip(
                   label: Text(lang),
@@ -683,8 +698,8 @@ class _PortfolioPageState extends State<PortfolioPage> {
             ),
             SizedBox(height: 12),
             Wrap(
-              spacing: 30,
-              runSpacing: 30,
+              spacing: 12,
+              runSpacing: 12,
               children: backEndTechs.map((lang) {
                 return Chip(
                   label: Text(lang),
@@ -710,8 +725,8 @@ class _PortfolioPageState extends State<PortfolioPage> {
             ),
             SizedBox(height: 12),
             Wrap(
-              spacing: 30,
-              runSpacing: 30,
+              spacing: 12,
+              runSpacing: 12,
               children: cloudTools.map((lang) {
                 return Chip(
                   label: Text(lang),
@@ -736,8 +751,8 @@ class _PortfolioPageState extends State<PortfolioPage> {
             ),
             SizedBox(height: 12),
             Wrap(
-              spacing: 20,
-              runSpacing: 20,
+              spacing: 12,
+              runSpacing: 12,
               children: languages.map((lang) {
                 return Chip(
                   label: Text(lang),
