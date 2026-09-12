@@ -5,6 +5,7 @@ import 'dart:typed_data';
 
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 import 'utils/csv_downloader.dart';
 import 'utils/widgets.dart';
@@ -24,6 +25,16 @@ class _Player {
   int seed;
 
   _Player(this.id, this.name, {this.seed = 0});
+
+  Map<String, dynamic> toJson() => {'id': id, 'name': name, 'seed': seed};
+
+  factory _Player.fromJson(Map<String, dynamic> json) {
+    return _Player(
+      json['id'] as String,
+      json['name'] as String,
+      seed: json['seed'] as int? ?? 0,
+    );
+  }
 }
 
 class _Match {
@@ -49,6 +60,34 @@ class _Match {
 
   bool get hasPlayers => playerA != null || playerB != null;
   bool get isComplete => winnerId != null;
+
+  Map<String, dynamic> toJson() => {
+        'id': id,
+        'group': group,
+        'round': round,
+        'slot': slot,
+        'playerA': playerA,
+        'playerB': playerB,
+        'winnerId': winnerId,
+        'scoreA': scoreA,
+        'scoreB': scoreB,
+        'notes': notes,
+      };
+
+  factory _Match.fromJson(Map<String, dynamic> json) {
+    return _Match(
+      id: json['id'] as String,
+      group: json['group'] as int,
+      round: json['round'] as int,
+      slot: json['slot'] as int,
+      playerA: json['playerA'] as String?,
+      playerB: json['playerB'] as String?,
+    )
+      ..winnerId = json['winnerId'] as String?
+      ..scoreA = json['scoreA'] as int?
+      ..scoreB = json['scoreB'] as int?
+      ..notes = json['notes'] as String?;
+  }
 }
 
 enum _TournamentStatus { setup, running, paused, stopped, completed }
@@ -89,9 +128,42 @@ class _TournamentStageSnapshot {
     required this.bracketCount,
     required this.status,
   });
+
+  Map<String, dynamic> toJson() => {
+        'type': type?.name,
+        'players': players.map((p) => p.toJson()).toList(),
+        'matches': matches.map((m) => m.toJson()).toList(),
+        'history': history,
+        'round': round,
+        'rounds': rounds,
+        'bracketCount': bracketCount,
+        'status': status.name,
+      };
+
+  factory _TournamentStageSnapshot.fromJson(Map<String, dynamic> json) {
+    return _TournamentStageSnapshot(
+      type: json['type'] != null
+          ? BracketType.values.firstWhere((e) => e.name == json['type'])
+          : null,
+      players: (json['players'] as List)
+          .map((p) => _Player.fromJson(p as Map<String, dynamic>))
+          .toList(),
+      matches: (json['matches'] as List)
+          .map((m) => _Match.fromJson(m as Map<String, dynamic>))
+          .toList(),
+      history: List<String>.from(json['history'] as List),
+      round: json['round'] as int,
+      rounds: json['rounds'] as int,
+      bracketCount: json['bracketCount'] as int,
+      status: _TournamentStatus.values
+          .firstWhere((e) => e.name == json['status']),
+    );
+  }
 }
 
 class _TournamentController extends ChangeNotifier {
+  static const String _sessionKey = 'tournament_session_state';
+
   final Random _random = Random();
   final List<_Player> players = [];
   final List<_Match> matches = [];
@@ -113,6 +185,120 @@ class _TournamentController extends ChangeNotifier {
   _TournamentStageSnapshot? _swissStage;
   _TournamentStageSnapshot? _singleEliminationStage;
 
+  _TournamentController() {
+    _loadState();
+  }
+
+  void _persistState() async {
+    final prefs = await SharedPreferences.getInstance();
+    final Map<String, dynamic> stateData = {
+      'players': players.map((p) => p.toJson()).toList(),
+      'matches': matches.map((m) => m.toJson()).toList(),
+      'archivedMatches': archivedMatches.map((m) => m.toJson()).toList(),
+      'archivedPlayerNames': archivedPlayerNames,
+      'history': history,
+      'seconds': _seconds,
+      'bracketCount': bracketCount,
+      'customMatching': customMatching,
+      'status': status.name,
+      'showSeeding': showSeeding,
+      'bracketType': bracketType?.name,
+      'tournamentName': tournamentName,
+      'swissRounds': swissRounds,
+      'swissRound': swissRound,
+      'swissAdvanceCount': swissAdvanceCount,
+      'swissAdvanceConfigured': swissAdvanceConfigured,
+      'swissStage': _swissStage?.toJson(),
+      'singleEliminationStage': _singleEliminationStage?.toJson(),
+    };
+    await prefs.setString(_sessionKey, jsonEncode(stateData));
+  }
+
+  Future<void> _loadState() async {
+    final prefs = await SharedPreferences.getInstance();
+    final raw = prefs.getString(_sessionKey);
+    if (raw == null) return;
+
+    try {
+      final Map<String, dynamic> data = jsonDecode(raw);
+
+      players.clear();
+      if (data['players'] != null) {
+        players.addAll((data['players'] as List)
+            .map((p) => _Player.fromJson(p as Map<String, dynamic>)));
+      }
+
+      matches.clear();
+      if (data['matches'] != null) {
+        matches.addAll((data['matches'] as List)
+            .map((m) => _Match.fromJson(m as Map<String, dynamic>)));
+      }
+
+      archivedMatches.clear();
+      if (data['archivedMatches'] != null) {
+        archivedMatches.addAll((data['archivedMatches'] as List)
+            .map((m) => _Match.fromJson(m as Map<String, dynamic>)));
+      }
+
+      archivedPlayerNames.clear();
+      if (data['archivedPlayerNames'] != null) {
+        archivedPlayerNames.addAll(
+          Map<String, String>.from(data['archivedPlayerNames'] as Map),
+        );
+      }
+
+      history.clear();
+      if (data['history'] != null) {
+        history.addAll(List<String>.from(data['history'] as List));
+      }
+
+      _seconds = data['seconds'] as int? ?? 0;
+      bracketCount = data['bracketCount'] as int? ?? 1;
+      customMatching = data['customMatching'] as bool? ?? false;
+      showSeeding = data['showSeeding'] as bool? ?? true;
+      tournamentName = data['tournamentName'] as String? ?? 'Tournament';
+      swissRounds = data['swissRounds'] as int? ?? 3;
+      swissRound = data['swissRound'] as int? ?? 0;
+      swissAdvanceCount = data['swissAdvanceCount'] as int? ?? 0;
+      swissAdvanceConfigured = data['swissAdvanceConfigured'] as bool? ?? false;
+
+      if (data['status'] != null) {
+        status = _TournamentStatus.values
+            .firstWhere((e) => e.name == data['status']);
+      }
+
+      if (data['bracketType'] != null) {
+        bracketType = BracketType.values
+            .firstWhere((e) => e.name == data['bracketType']);
+      }
+
+      if (data['swissStage'] != null) {
+        _swissStage = _TournamentStageSnapshot.fromJson(
+            data['swissStage'] as Map<String, dynamic>);
+      }
+
+      if (data['singleEliminationStage'] != null) {
+        _singleEliminationStage = _TournamentStageSnapshot.fromJson(
+            data['singleEliminationStage'] as Map<String, dynamic>);
+      }
+
+      if (status == _TournamentStatus.running) {
+        _startTimer();
+      }
+
+      notifyListeners();
+    } catch (_) {}
+  }
+
+  void _startTimer() {
+    _timer ??= Timer.periodic(const Duration(seconds: 1), (_) {
+      if (status == _TournamentStatus.running) {
+        _seconds++;
+        notifyListeners();
+      }
+    });
+  }
+
   int get elapsedSeconds => _seconds;
   String get elapsedLabel {
     final minutes = (_seconds ~/ 60).toString().padLeft(2, '0');
@@ -121,22 +307,22 @@ class _TournamentController extends ChangeNotifier {
   }
 
   Map<String, _Player> get playerById => {
-    for (final player in players) player.id: player,
-  };
+        for (final player in players) player.id: player,
+      };
 
   List<List<_Match>> matchesForGroup(int group) {
     final grouped = <int, List<_Match>>{};
-    
+
     for (final match in matches.where((match) => match.group == group)) {
       grouped.putIfAbsent(match.round, () => []).add(match);
     }
-    
+
     for (final entry in grouped.entries) {
       if (entry.value.isNotEmpty) {
         entry.value.sort((a, b) => a.slot.compareTo(b.slot));
       }
     }
-    
+
     return grouped.values.toList();
   }
 
@@ -222,9 +408,10 @@ class _TournamentController extends ChangeNotifier {
     _SwissStanding standing,
     Map<String, _SwissStanding> standings,
     Map<String, Set<String>> opponents,
-  ) => (opponents[standing.player.id] ?? {})
-      .map((id) => standings[id]?.matchPoints ?? 0)
-      .fold(0, (sum, points) => sum + points);
+  ) =>
+      (opponents[standing.player.id] ?? {})
+          .map((id) => standings[id]?.matchPoints ?? 0)
+          .fold(0, (sum, points) => sum + points);
 
   int buchholzFor(String playerId) {
     final standing = swissStandings.firstWhereOrNull(
@@ -387,15 +574,16 @@ class _TournamentController extends ChangeNotifier {
   }
 
   void generateBracket({List<_Player>? source}) {
-    if (status != _TournamentStatus.setup || (source ?? players).length < 2)
+    if (status != _TournamentStatus.setup || (source ?? players).length < 2) {
       return;
+    }
     if (isSwiss && source == null) {
       matches.clear();
       swissRound = 1;
       generateSwissRound();
       return;
     }
-    
+
     archivedMatches.addAll(matches);
     matches.clear();
     final roster = [...(source ?? players)];
@@ -445,7 +633,7 @@ class _TournamentController extends ChangeNotifier {
       }
     }
     _resolveByes();
-    
+
     history.add(
       'Generated ${players.length} players across $groupTotal bracket${groupTotal == 1 ? '' : 's'}.',
     );
@@ -489,18 +677,17 @@ class _TournamentController extends ChangeNotifier {
         ),
       );
     }
-    final bye = ordered
-        .where((player) => !used.contains(player.id))
-        .firstOrNull;
+    final bye =
+        ordered.where((player) => !used.contains(player.id)).firstOrNull;
     if (bye != null) {
       matches.add(
         _Match(
-            id: 'swiss-r$swissRound-bye',
-            group: 0,
-            round: swissRound,
-            slot: matches.length,
-            playerA: bye.id,
-          )
+          id: 'swiss-r$swissRound-bye',
+          group: 0,
+          round: swissRound,
+          slot: matches.length,
+          playerA: bye.id,
+        )
           ..winnerId = bye.id
           ..scoreA = 1
           ..scoreB = 0,
@@ -511,23 +698,17 @@ class _TournamentController extends ChangeNotifier {
   }
 
   bool _hasPlayed(String first, String second) => matches.any(
-    (match) =>
-        (match.playerA == first && match.playerB == second) ||
-        (match.playerA == second && match.playerB == first),
-  );
+        (match) =>
+            (match.playerA == first && match.playerB == second) ||
+            (match.playerA == second && match.playerB == first),
+      );
 
   void start() {
     if (players.length < 2 ||
         matches.isEmpty ||
-        status == _TournamentStatus.running)
-      return;
+        status == _TournamentStatus.running) return;
     status = _TournamentStatus.running;
-    _timer ??= Timer.periodic(const Duration(seconds: 1), (_) {
-      if (status == _TournamentStatus.running) {
-        _seconds++;
-        notifyListeners();
-      }
-    });
+    _startTimer();
     notifyListeners();
   }
 
@@ -592,8 +773,7 @@ class _TournamentController extends ChangeNotifier {
 
   void chooseWinner(String matchId, String playerId) {
     if (status != _TournamentStatus.running &&
-        status != _TournamentStatus.paused)
-      return;
+        status != _TournamentStatus.paused) return;
     final match = matches.firstWhere((item) => item.id == matchId);
     if (match.playerA != playerId && match.playerB != playerId) return;
     if (match.winnerId != null) return;
@@ -623,11 +803,11 @@ class _TournamentController extends ChangeNotifier {
   ) {
     if (!isSwiss ||
         (status != _TournamentStatus.running &&
-            status != _TournamentStatus.paused))
-      return;
+            status != _TournamentStatus.paused)) return;
     final match = matches.firstWhere((item) => item.id == matchId);
-    if (match.winnerId != null || match.playerA == null || match.playerB == null)
-      return;
+    if (match.winnerId != null ||
+        match.playerA == null ||
+        match.playerB == null) return;
 
     match.scoreA = scoreA;
     match.scoreB = scoreB;
@@ -744,15 +924,14 @@ class _TournamentController extends ChangeNotifier {
   _Player _copyPlayer(_Player player) =>
       _Player(player.id, player.name, seed: player.seed);
 
-  _Match _copyMatch(_Match match) =>
-      _Match(
-          id: match.id,
-          group: match.group,
-          round: match.round,
-          slot: match.slot,
-          playerA: match.playerA,
-          playerB: match.playerB,
-        )
+  _Match _copyMatch(_Match match) => _Match(
+        id: match.id,
+        group: match.group,
+        round: match.round,
+        slot: match.slot,
+        playerA: match.playerA,
+        playerB: match.playerB,
+      )
         ..winnerId = match.winnerId
         ..scoreA = match.scoreA
         ..scoreB = match.scoreB
@@ -773,14 +952,12 @@ class _TournamentController extends ChangeNotifier {
 
   void dropWinner(String playerId, String targetMatchId) {
     if (status != _TournamentStatus.running &&
-        status != _TournamentStatus.paused)
-      return;
+        status != _TournamentStatus.paused) return;
     final target = matches.firstWhere((match) => match.id == targetMatchId);
     final source = _matchContaining(playerId);
     if (source == null ||
         source.round >= target.round ||
-        source.winnerId != null)
-      return;
+        source.winnerId != null) return;
     chooseWinner(source.id, playerId);
   }
 
@@ -791,8 +968,9 @@ class _TournamentController extends ChangeNotifier {
       final finalMatch = groupMatches.reduce(
         (a, b) => a.round > b.round ? a : b,
       );
-      if (finalMatch.winnerId != null)
+      if (finalMatch.winnerId != null) {
         result.add(playerById[finalMatch.winnerId]!);
+      }
     }
     return result;
   }
@@ -986,18 +1164,17 @@ class _TournamentController extends ChangeNotifier {
           : BracketType.singleElimination;
       final stageKey = type.name;
       final ids = stageIds[stageKey] ?? {};
-      final match =
-          _Match(
-              id: row[4],
-              group: 0,
-              round: int.tryParse(row[3]) ?? 0,
-              slot: stageMatches[stageKey]?.length ?? 0,
-              playerA: ids[row[5]],
-              playerB: ids[row[6]],
-            )
-            ..winnerId = ids[row[7]]
-            ..scoreA = int.tryParse(row[8])
-            ..scoreB = int.tryParse(row[9]);
+      final match = _Match(
+        id: row[4],
+        group: 0,
+        round: int.tryParse(row[3]) ?? 0,
+        slot: stageMatches[stageKey]?.length ?? 0,
+        playerA: ids[row[5]],
+        playerB: ids[row[6]],
+      )
+        ..winnerId = ids[row[7]]
+        ..scoreA = int.tryParse(row[8])
+        ..scoreB = int.tryParse(row[9]);
       stageMatches.putIfAbsent(stageKey, () => []).add(match);
     }
     for (final type in BracketType.values) {
@@ -1067,6 +1244,12 @@ class _TournamentController extends ChangeNotifier {
   }
 
   @override
+  void notifyListeners() {
+    _persistState();
+    super.notifyListeners();
+  }
+
+  @override
   void dispose() {
     _timer?.cancel();
     super.dispose();
@@ -1130,8 +1313,9 @@ class _TournamentController extends ChangeNotifier {
   _Match? _matchContaining(String playerId) {
     for (final match in matches) {
       if (match.round == 0 &&
-          (match.playerA == playerId || match.playerB == playerId))
+          (match.playerA == playerId || match.playerB == playerId)) {
         return match;
+      }
     }
     return null;
   }
@@ -1664,8 +1848,7 @@ class _TournamentPanelState extends State<TournamentPanel> {
                 _swissRoundsSelector(),
                 _swissAdvanceSelector(),
               ] else
-                // _bracketSelector(),
-              _bracketTypeSelector(),
+                _bracketTypeSelector(),
             ],
           ),
         ],
@@ -1690,40 +1873,6 @@ class _TournamentPanelState extends State<TournamentPanel> {
         disabledForegroundColor: widget.theme.textSecondary,
         padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 9),
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(4)),
-      ),
-    );
-  }
-
-  Widget _bracketSelector() {
-    return Container(
-      height: 40,
-      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
-      decoration: BoxDecoration(
-        color: widget.theme.background,
-        border: Border.all(color: widget.theme.border),
-        borderRadius: BorderRadius.circular(4),
-      ),
-      child: DropdownButtonHideUnderline(
-        child: DropdownButton<int>(
-          value: min(
-            _controller.bracketCount,
-            max(1, _controller.players.length),
-          ),
-          dropdownColor: widget.theme.surface,
-          style: TextStyle(color: widget.theme.textPrimary, fontSize: 12),
-          items: List.generate(
-            max(1, min(8, max(1, _controller.players.length))),
-            (index) => DropdownMenuItem(
-              value: index + 1,
-              child: Text('${index + 1} bracket${index == 0 ? '' : 's'}'),
-            ),
-          ),
-          onChanged: _controller.canClear && _controller.players.length >= 2
-              ? (value) {
-                  if (value != null) _controller.setBracketCount(value);
-                }
-              : null,
-        ),
       ),
     );
   }
@@ -1836,7 +1985,7 @@ class _TournamentPanelState extends State<TournamentPanel> {
       color: widget.theme.surface.withValues(alpha: 0.5),
       child: ExpansionTile(
         title: Text(
-          'Players List', 
+          'Players List',
           style: TextStyle(
             color: widget.theme.textSecondary,
             fontSize: 14,
@@ -1844,20 +1993,20 @@ class _TournamentPanelState extends State<TournamentPanel> {
             letterSpacing: 1,
           ),
         ),
-        maintainState: true, 
+        maintainState: true,
         children: [
           SizedBox(
             height: 450,
             child: GridView.builder(
-              shrinkWrap: false, 
+              shrinkWrap: false,
               physics: const AlwaysScrollableScrollPhysics(),
               itemCount: _controller.players.length,
               padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 12),
-              cacheExtent: 160, 
+              cacheExtent: 160,
               gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-                crossAxisCount: 3,        
-                crossAxisSpacing: 6,     
-                mainAxisSpacing: 6,       
+                crossAxisCount: 3,
+                crossAxisSpacing: 6,
+                mainAxisSpacing: 6,
                 mainAxisExtent: 40,
               ),
               itemBuilder: (context, index) {
@@ -1867,7 +2016,9 @@ class _TournamentPanelState extends State<TournamentPanel> {
                   decoration: BoxDecoration(
                     color: widget.theme.surface.withValues(alpha: 0.5),
                     borderRadius: BorderRadius.circular(4),
-                    border: Border.all(color: widget.theme.border.withValues(alpha: 0.4)),
+                    border: Border.all(
+                      color: widget.theme.border.withValues(alpha: 0.4),
+                    ),
                   ),
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
@@ -1876,9 +2027,9 @@ class _TournamentPanelState extends State<TournamentPanel> {
                       Text(
                         player.name,
                         maxLines: 1,
-                        overflow: TextOverflow.ellipsis, 
+                        overflow: TextOverflow.ellipsis,
                         style: TextStyle(
-                          color: widget.theme.textPrimary, 
+                          color: widget.theme.textPrimary,
                           fontSize: 12,
                           fontWeight: FontWeight.w700,
                         ),
@@ -1887,7 +2038,7 @@ class _TournamentPanelState extends State<TournamentPanel> {
                         Text(
                           'Seed: ${player.seed}',
                           style: TextStyle(
-                            color: widget.theme.textPrimary, 
+                            color: widget.theme.textPrimary,
                             fontSize: 9,
                           ),
                         ),
@@ -1922,8 +2073,8 @@ class _TournamentPanelState extends State<TournamentPanel> {
             _controller.players.length < 2
                 ? 'Add at least 2 players to begin'
                 : _controller.isSwiss
-                ? 'Build Swiss rounds to start the tournament'
-                : 'Build a bracket to start the tournament',
+                    ? 'Build Swiss rounds to start the tournament'
+                    : 'Build a bracket to start the tournament',
             style: TextStyle(
               color: widget.theme.textPrimary,
               fontSize: 14,
@@ -1935,8 +2086,8 @@ class _TournamentPanelState extends State<TournamentPanel> {
             _controller.players.length < 2
                 ? 'Enter player names above to get started.'
                 : _controller.isSwiss
-                ? 'Choose the number of rounds, then build the tournament.'
-                : 'Click "Build bracket" to generate the tournament tree.',
+                    ? 'Choose the number of rounds, then build the tournament.'
+                    : 'Click "Build bracket" to generate the tournament tree.',
             textAlign: TextAlign.center,
             style: TextStyle(color: widget.theme.textSecondary, fontSize: 12),
           ),
@@ -1946,50 +2097,49 @@ class _TournamentPanelState extends State<TournamentPanel> {
   }
 
   Widget _buildBracketContainer(bool compact) {
-  final groups =
-      _controller.matches.map((match) => match.group).toSet().toList()
-        ..sort();
-  
-  // Fix: Check if any match in the group has visible content
-  final hasVisibleMatches = groups.any((group) {
-    return _controller.matches
-        .where((m) => m.group == group)
-        .any(_hasVisibleContent);
-  });
-  
-  if (!hasVisibleMatches && _controller.matches.isNotEmpty) {
+    final groups =
+        _controller.matches.map((match) => match.group).toSet().toList()
+          ..sort();
+
+    final hasVisibleMatches = groups.any((group) {
+      return _controller.matches
+          .where((m) => m.group == group)
+          .any(_hasVisibleContent);
+    });
+
+    if (!hasVisibleMatches && _controller.matches.isNotEmpty) {
+      return Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          _buildBracketInfo(),
+          const SizedBox(height: 12),
+          Container(
+            padding: const EdgeInsets.all(30),
+            child: Center(
+              child: Icon(
+                Icons.brush_outlined,
+                size: 64,
+                color: widget.theme.textSecondary,
+              ),
+            ),
+          ),
+          Text(
+            '${_controller.players.length} players - scroll to view bracket',
+            style: TextStyle(color: widget.theme.textPrimary, fontSize: 14),
+          ),
+        ],
+      );
+    }
+
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
         _buildBracketInfo(),
         const SizedBox(height: 12),
-        Container(
-          padding: const EdgeInsets.all(30),
-          child: Center(
-            child: Icon(
-              Icons.brush_outlined,
-              size: 64,
-              color: widget.theme.textSecondary,
-            ),
-          ),
-        ),
-        Text(
-          '${_controller.players.length} players - scroll to view bracket',
-          style: TextStyle(color: widget.theme.textPrimary, fontSize: 14),
-        ),
+        ...groups.map((group) => _buildGroupContainer(group)),
       ],
     );
   }
-  
-  return Column(
-    crossAxisAlignment: CrossAxisAlignment.stretch,
-    children: [
-      _buildBracketInfo(),
-      const SizedBox(height: 12),
-      ...groups.map((group) => _buildGroupContainer(group)),
-    ],
-  );
-}
 
   Widget _buildBracketInfo() {
     return Container(
@@ -2080,153 +2230,154 @@ class _TournamentPanelState extends State<TournamentPanel> {
   }
 
   Future<bool?> _showStandingsDialog({bool showProceed = false}) async {
-  final screenWidth = MediaQuery.of(context).size.width;
-  final isMobile = screenWidth < 800;
-  final isTablet = screenWidth >= 1400 && screenWidth < 2200;
-  final isAlmostMobile = screenWidth >= 800 && screenWidth < 1400;
+    final screenWidth = MediaQuery.of(context).size.width;
+    final isMobile = screenWidth < 800;
+    final isTablet = screenWidth >= 1400 && screenWidth < 2200;
+    final isAlmostMobile = screenWidth >= 800 && screenWidth < 1400;
 
-  final dashboardWidth = isMobile
-      ? screenWidth * 0.99
-      : isTablet
-      ? screenWidth * 0.7
-      : isAlmostMobile
-      ? screenWidth * 0.95
-      : screenWidth * 0.5;
+    final dashboardWidth = isMobile
+        ? screenWidth * 0.99
+        : isTablet
+            ? screenWidth * 0.7
+            : isAlmostMobile
+                ? screenWidth * 0.95
+                : screenWidth * 0.5;
 
-  final standings = _controller.swissStandings;
-  return showDialog<bool>(
-    context: context,
-    builder: (context) => _wireDialog(
-      width: dashboardWidth,
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          Text(
-            '${_controller.tournamentName} standings',
-            style: TextStyle(
-              color: widget.theme.textPrimary,
-              fontSize: 20,
-              fontWeight: FontWeight.w700,
-            ),
-          ),
-          if (showProceed) ...[
-            const SizedBox(height: 8),
+    final standings = _controller.swissStandings;
+    return showDialog<bool>(
+      context: context,
+      builder: (context) => _wireDialog(
+        width: dashboardWidth,
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
             Text(
-              'Top ${_controller.swissAdvanceCount} players are marked to advance.',
+              '${_controller.tournamentName} standings',
               style: TextStyle(
-                color: widget.theme.textSecondary,
-                fontSize: 12,
+                color: widget.theme.textPrimary,
+                fontSize: 20,
+                fontWeight: FontWeight.w700,
+              ),
+            ),
+            if (showProceed) ...[
+              const SizedBox(height: 8),
+              Text(
+                'Top ${_controller.swissAdvanceCount} players are marked to advance.',
+                style: TextStyle(
+                  color: widget.theme.textSecondary,
+                  fontSize: 12,
+                ),
+              ),
+            ],
+            const SizedBox(height: 16),
+            SizedBox(
+              height: MediaQuery.of(context).size.height * 0.5,
+              child: SingleChildScrollView(
+                scrollDirection: Axis.vertical,
+                child: SingleChildScrollView(
+                  scrollDirection: Axis.horizontal,
+                  child: DataTable(
+                    columns: const [
+                      DataColumn(label: Text('#')),
+                      DataColumn(label: Text('Advance')),
+                      DataColumn(label: Text('Player')),
+                      DataColumn(label: Text('W-L')),
+                      DataColumn(label: Text('Points')),
+                      DataColumn(label: Text('Diff')),
+                      DataColumn(label: Text('Score')),
+                      DataColumn(label: Text('Buchholz')),
+                      DataColumn(label: Text('History')),
+                    ],
+                    rows: [
+                      for (final (index, standing) in standings.indexed)
+                        DataRow(
+                          color: index < _controller.swissAdvanceCount
+                              ? WidgetStatePropertyAll(
+                                  widget.theme.accent.withValues(alpha: 0.12),
+                                )
+                              : null,
+                          cells: [
+                            DataCell(Text('${index + 1}')),
+                            DataCell(
+                              index < _controller.swissAdvanceCount
+                                  ? Icon(
+                                      Icons.check_circle,
+                                      color: AppColors.success,
+                                      size: 18,
+                                    )
+                                  : const SizedBox.shrink(),
+                            ),
+                            DataCell(Text(standing.player.name)),
+                            DataCell(
+                              Text('${standing.wins}-${standing.losses}'),
+                            ),
+                            DataCell(Text('${standing.matchPoints}')),
+                            DataCell(Text('${standing.pointDifference}')),
+                            DataCell(Text('${standing.pointsFor}')),
+                            DataCell(
+                              Text(
+                                '${_controller.buchholzFor(standing.player.id)}',
+                              ),
+                            ),
+                            DataCell(
+                              Row(
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  for (final result in standing.history)
+                                    Container(
+                                      margin: const EdgeInsets.only(right: 3),
+                                      padding: const EdgeInsets.symmetric(
+                                        horizontal: 5,
+                                        vertical: 2,
+                                      ),
+                                      color: result == 'W'
+                                          ? Colors.green
+                                          : Colors.red,
+                                      child: Text(
+                                        result,
+                                        style: const TextStyle(
+                                          color: Colors.white,
+                                          fontSize: 11,
+                                        ),
+                                      ),
+                                    ),
+                                ],
+                              ),
+                            ),
+                          ],
+                        ),
+                    ],
+                  ),
+                ),
+              ),
+            ),
+            const SizedBox(height: 16),
+            Align(
+              alignment: Alignment.centerRight,
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.end,
+                children: [
+                  TextButton(
+                    onPressed: () => Navigator.pop(context, false),
+                    child: Text(showProceed ? 'Review later' : 'Close'),
+                  ),
+                  if (showProceed) ...[
+                    const SizedBox(width: 8),
+                    FilledButton.icon(
+                      onPressed: () => Navigator.pop(context, true),
+                      icon: const Icon(Icons.account_tree_outlined, size: 18),
+                      label: const Text('Proceed to single elim'),
+                    ),
+                  ],
+                ],
               ),
             ),
           ],
-          const SizedBox(height: 16),
-          // Bounded height container to enable vertical scrolling for overflow
-          SizedBox(
-            height: MediaQuery.of(context).size.height * 0.5,
-            child: SingleChildScrollView(
-              scrollDirection: Axis.vertical,
-              child: SingleChildScrollView(
-                scrollDirection: Axis.horizontal,
-                child: DataTable(
-                  columns: const [
-                    DataColumn(label: Text('#')),
-                    DataColumn(label: Text('Advance')),
-                    DataColumn(label: Text('Player')),
-                    DataColumn(label: Text('W-L')),
-                    DataColumn(label: Text('Points')),
-                    DataColumn(label: Text('Diff')),
-                    DataColumn(label: Text('Score')),
-                    DataColumn(label: Text('Buchholz')),
-                    DataColumn(label: Text('History')),
-                  ],
-                  rows: [
-                    for (final (index, standing) in standings.indexed)
-                      DataRow(
-                        color: index < _controller.swissAdvanceCount
-                            ? WidgetStatePropertyAll(
-                                widget.theme.accent.withValues(alpha: 0.12),
-                              )
-                            : null,
-                        cells: [
-                          DataCell(Text('${index + 1}')),
-                          DataCell(
-                            index < _controller.swissAdvanceCount
-                                ? Icon(
-                                    Icons.check_circle,
-                                    color: AppColors.success,
-                                    size: 18,
-                                  )
-                                : const SizedBox.shrink(),
-                          ),
-                          DataCell(Text(standing.player.name)),
-                          DataCell(Text('${standing.wins}-${standing.losses}')),
-                          DataCell(Text('${standing.matchPoints}')),
-                          DataCell(Text('${standing.pointDifference}')),
-                          DataCell(Text('${standing.pointsFor}')),
-                          DataCell(
-                            Text(
-                              '${_controller.buchholzFor(standing.player.id)}',
-                            ),
-                          ),
-                          DataCell(
-                            Row(
-                              mainAxisSize: MainAxisSize.min,
-                              children: [
-                                for (final result in standing.history)
-                                  Container(
-                                    margin: const EdgeInsets.only(right: 3),
-                                    padding: const EdgeInsets.symmetric(
-                                      horizontal: 5,
-                                      vertical: 2,
-                                    ),
-                                    color: result == 'W'
-                                        ? Colors.green
-                                        : Colors.red,
-                                    child: Text(
-                                      result,
-                                      style: const TextStyle(
-                                        color: Colors.white,
-                                        fontSize: 11,
-                                      ),
-                                    ),
-                                  ),
-                              ],
-                            ),
-                          ),
-                        ],
-                      ),
-                  ],
-                ),
-              ),
-            ),
-          ),
-          const SizedBox(height: 16),
-          Align(
-            alignment: Alignment.centerRight,
-            child: Row(
-              mainAxisAlignment: MainAxisAlignment.end,
-              children: [
-                TextButton(
-                  onPressed: () => Navigator.pop(context, false),
-                  child: Text(showProceed ? 'Review later' : 'Close'),
-                ),
-                if (showProceed) ...[
-                  const SizedBox(width: 8),
-                  FilledButton.icon(
-                    onPressed: () => Navigator.pop(context, true),
-                    icon: const Icon(Icons.account_tree_outlined, size: 18),
-                    label: const Text('Proceed to single elim'),
-                  ),
-                ],
-              ],
-            ),
-          ),
-        ],
+        ),
       ),
-    ),
-  );
-}
+    );
+  }
 
   Widget _buildGroupContainer(int group) {
     final rounds = _controller.matchesForGroup(group);
@@ -2320,8 +2471,8 @@ class _TournamentPanelState extends State<TournamentPanel> {
                       bottom: idx == visibleMatches.length - 1
                           ? 0
                           : roundIndex == 0
-                          ? 8
-                          : (pow(2, roundIndex) * 56) - 48,
+                              ? 8
+                              : (pow(2, roundIndex) * 56) - 48,
                     ),
                     child: _buildMatchCard(match),
                   ),
@@ -2614,13 +2765,19 @@ class _TournamentPanelState extends State<TournamentPanel> {
   }
 
   Future<void> _showSwissResultDialog(_Match match) async {
-    if (match.winnerId != null || match.playerA == null || match.playerB == null) return;
-    
-    final playerAName = _controller.playerById[match.playerA!]?.name ?? 'Player A';
-    final playerBName = _controller.playerById[match.playerB!]?.name ?? 'Player B';
+    if (match.winnerId != null ||
+        match.playerA == null ||
+        match.playerB == null) return;
 
-    final scoreAController = TextEditingController(text: '${match.scoreA ?? 0}');
-    final scoreBController = TextEditingController(text: '${match.scoreB ?? 0}');
+    final playerAName =
+        _controller.playerById[match.playerA!]?.name ?? 'Player A';
+    final playerBName =
+        _controller.playerById[match.playerB!]?.name ?? 'Player B';
+
+    final scoreAController =
+        TextEditingController(text: '${match.scoreA ?? 0}');
+    final scoreBController =
+        TextEditingController(text: '${match.scoreB ?? 0}');
 
     final confirmed = await showDialog<bool>(
       context: context,
