@@ -197,7 +197,7 @@ class _TournamentController extends ChangeNotifier {
   int swissRound = 0;
   int swissAdvanceCount = 0;
   bool swissAdvanceConfigured = false;
-  
+
   ByeMode byeMode = ByeMode.automatic;
   int customByeCount = 0;
 
@@ -1395,7 +1395,33 @@ class _TournamentController extends ChangeNotifier {
     while (changed) {
       changed = false;
       for (final match in matches) {
-        if (match.winnerId != null || !match.hasPlayers) continue;
+        if (match.winnerId != null) continue;
+
+        if (match.round > 0) {
+          final feederMatches = matches.where(
+            (feeder) =>
+                feeder.group == match.group &&
+                feeder.round == match.round - 1 &&
+                (feeder.slot == match.slot * 2 ||
+                    feeder.slot == match.slot * 2 + 1),
+          ).toList();
+
+          if (feederMatches.length == 2) {
+            final f0 = feederMatches.firstWhere((f) => f.slot == match.slot * 2);
+            final f1 = feederMatches.firstWhere((f) => f.slot == match.slot * 2 + 1);
+
+            if (f0.winnerId != null && match.playerA == null) {
+              match.playerA = f0.winnerId;
+              changed = true;
+            }
+            if (f1.winnerId != null && match.playerB == null) {
+              match.playerB = f1.winnerId;
+              changed = true;
+            }
+          }
+        }
+
+        if (!match.hasPlayers) continue;
         if (match.playerA != null && match.playerB != null) continue;
 
         if (match.round > 0) {
@@ -1406,7 +1432,7 @@ class _TournamentController extends ChangeNotifier {
                 (feeder.slot == match.slot * 2 ||
                     feeder.slot == match.slot * 2 + 1),
           );
-          if (feederMatches.length != 2 ||
+          if (feederMatches.length == 2 &&
               feederMatches.any((feeder) => !_branchResolved(feeder))) {
             continue;
           }
@@ -1976,6 +2002,7 @@ class _TournamentPanelState extends State<TournamentPanel> {
                 _controller.hasHistory ? _showHistoryDialog : null,
               ),
               if (_controller.isSwiss) ...[
+                _bracketTypeSelector(),
                 _swissRoundsSelector(),
                 _swissAdvanceSelector(),
               ] else ...[
@@ -2633,11 +2660,9 @@ class _TournamentPanelState extends State<TournamentPanel> {
   ) {
     final visibleMatches = round.where(_hasVisibleContent).toList();
 
-    // Determine if this round is complete (all matches scored/played)
     final bool isThisRoundComplete =
         visibleMatches.isNotEmpty && visibleMatches.every((m) => m.isComplete);
 
-    // Calculate how many preceding consecutive rounds are finished
     int finishedPrecedingRounds = 0;
     for (int r = 0; r < roundIndex; r++) {
       final precedingMatches = allRounds[r].where(_hasVisibleContent).toList();
@@ -2649,7 +2674,6 @@ class _TournamentPanelState extends State<TournamentPanel> {
       }
     }
 
-    // Dynamic Top & Bottom spacing adjustment
     final double topMargin;
     final double matchSpacing;
 
@@ -2764,15 +2788,31 @@ class _TournamentPanelState extends State<TournamentPanel> {
     );
   }
 
+  bool _isMatchReady(_Match match) {
+    if (match.isComplete) return false;
+    if (match.playerA != null && match.playerB != null) return true;
+    
+    final feederMatches = _controller.matches.where(
+      (feeder) =>
+          feeder.group == match.group &&
+          feeder.round == match.round - 1 &&
+          (feeder.slot == match.slot * 2 || feeder.slot == match.slot * 2 + 1),
+    );
+    
+    if (feederMatches.isEmpty) return match.hasPlayers;
+    return feederMatches.every((feeder) => _controller._branchResolved(feeder));
+  }
+
   Widget _buildPlayerSlot(_Match match, int slot) {
     final id = slot == 0 ? match.playerA : match.playerB;
     final player = id == null ? null : _controller.playerById[id];
     final isWinner = id != null && match.winnerId == id;
     final isLoser = match.winnerId != null && id != null && !isWinner;
     final score = slot == 0 ? match.scoreA : match.scoreB;
+    final bool matchReady = _isMatchReady(match);
 
     Widget content = InkWell(
-      onTap: !_controller.canClear
+      onTap: (!_controller.canClear && matchReady)
           ? () {
               if (_controller.isSwiss) {
                 _showSwissResultDialog(match);
@@ -2803,9 +2843,11 @@ class _TournamentPanelState extends State<TournamentPanel> {
                 style: TextStyle(
                   color: player == null
                       ? const Color(0xFFBDBDBD)
-                      : Colors.white,
+                      : matchReady
+                          ? Colors.white
+                          : Colors.white38,
                   fontSize: 11,
-                  fontWeight: isWinner ? FontWeight.w700 : FontWeight.w500,
+                  fontWeight: FontWeight.w700,
                 ),
               ),
             ),
