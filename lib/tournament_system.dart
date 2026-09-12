@@ -94,6 +94,8 @@ enum _TournamentStatus { setup, running, paused, stopped, completed }
 
 enum BracketType { singleElimination, swiss }
 
+enum ByeMode { none, automatic, custom }
+
 class _SwissStanding {
   final _Player player;
   int wins = 0;
@@ -117,6 +119,8 @@ class _TournamentStageSnapshot {
   final int rounds;
   final int bracketCount;
   final _TournamentStatus status;
+  final ByeMode byeMode;
+  final int customByeCount;
 
   _TournamentStageSnapshot({
     required this.type,
@@ -127,6 +131,8 @@ class _TournamentStageSnapshot {
     required this.rounds,
     required this.bracketCount,
     required this.status,
+    required this.byeMode,
+    required this.customByeCount,
   });
 
   Map<String, dynamic> toJson() => {
@@ -138,6 +144,8 @@ class _TournamentStageSnapshot {
         'rounds': rounds,
         'bracketCount': bracketCount,
         'status': status.name,
+        'byeMode': byeMode.name,
+        'customByeCount': customByeCount,
       };
 
   factory _TournamentStageSnapshot.fromJson(Map<String, dynamic> json) {
@@ -157,6 +165,13 @@ class _TournamentStageSnapshot {
       bracketCount: json['bracketCount'] as int,
       status: _TournamentStatus.values
           .firstWhere((e) => e.name == json['status']),
+      byeMode: json['byeMode'] != null
+          ? ByeMode.values.firstWhere(
+              (e) => e.name == json['byeMode'],
+              orElse: () => ByeMode.automatic,
+            )
+          : ByeMode.automatic,
+      customByeCount: json['customByeCount'] as int? ?? 0,
     );
   }
 }
@@ -182,6 +197,10 @@ class _TournamentController extends ChangeNotifier {
   int swissRound = 0;
   int swissAdvanceCount = 0;
   bool swissAdvanceConfigured = false;
+  
+  ByeMode byeMode = ByeMode.automatic;
+  int customByeCount = 0;
+
   _TournamentStageSnapshot? _swissStage;
   _TournamentStageSnapshot? _singleEliminationStage;
 
@@ -208,6 +227,8 @@ class _TournamentController extends ChangeNotifier {
       'swissRound': swissRound,
       'swissAdvanceCount': swissAdvanceCount,
       'swissAdvanceConfigured': swissAdvanceConfigured,
+      'byeMode': byeMode.name,
+      'customByeCount': customByeCount,
       'swissStage': _swissStage?.toJson(),
       'singleEliminationStage': _singleEliminationStage?.toJson(),
     };
@@ -261,6 +282,14 @@ class _TournamentController extends ChangeNotifier {
       swissRound = data['swissRound'] as int? ?? 0;
       swissAdvanceCount = data['swissAdvanceCount'] as int? ?? 0;
       swissAdvanceConfigured = data['swissAdvanceConfigured'] as bool? ?? false;
+
+      if (data['byeMode'] != null) {
+        byeMode = ByeMode.values.firstWhere(
+          (e) => e.name == data['byeMode'],
+          orElse: () => ByeMode.automatic,
+        );
+      }
+      customByeCount = data['customByeCount'] as int? ?? 0;
 
       if (data['status'] != null) {
         status = _TournamentStatus.values
@@ -441,6 +470,33 @@ class _TournamentController extends ChangeNotifier {
         finalMatches.every((match) => match.isComplete);
   }
 
+  int get automaticByeCount {
+    if (players.length < 2) return 0;
+    final nextPow2 = _nextPowerOfTwo(players.length);
+    return nextPow2 - players.length;
+  }
+
+  void setByeMode(ByeMode mode) {
+    if (!canClear) return;
+    byeMode = mode;
+    if (mode == ByeMode.custom) {
+      if (customByeCount <= 0 || customByeCount >= players.length) {
+        customByeCount = min(players.length - 1, automaticByeCount);
+      }
+    }
+    if (players.length >= 2) generateBracket();
+    notifyListeners();
+  }
+
+  void setCustomByeCount(int count) {
+    if (!canClear) return;
+    customByeCount = count.clamp(0, max(0, players.length - 1));
+    if (byeMode == ByeMode.custom && players.length >= 2) {
+      generateBracket();
+    }
+    notifyListeners();
+  }
+
   void addPlayer(String rawName) {
     final name = rawName.trim();
     if (name.isEmpty || players.length >= 150) return;
@@ -601,21 +657,18 @@ class _TournamentController extends ChangeNotifier {
       );
       cursor += groupPlayers.length;
       if (groupPlayers.isEmpty) continue;
-      final slotCount = _nextPowerOfTwo(groupPlayers.length);
-      final roundCount = max(1, log(slotCount) ~/ log(2));
-      final slots = List<String?>.filled(slotCount, null);
-      var playerCursor = 0;
-      var matchCursor = 0;
 
-      if (groupPlayers.length.isOdd) {
-        slots[0] = groupPlayers[playerCursor++].id;
-        matchCursor++;
+      int effectiveByeCount = 0;
+      if (byeMode == ByeMode.automatic) {
+        final nextPow2 = _nextPowerOfTwo(groupPlayers.length);
+        effectiveByeCount = nextPow2 - groupPlayers.length;
+      } else if (byeMode == ByeMode.custom) {
+        effectiveByeCount = customByeCount.clamp(0, groupPlayers.length - 1);
       }
-      while (playerCursor < groupPlayers.length) {
-        slots[matchCursor * 2] = groupPlayers[playerCursor++].id;
-        slots[matchCursor * 2 + 1] = groupPlayers[playerCursor++].id;
-        matchCursor++;
-      }
+
+      final slotCount = _nextPowerOfTwo(groupPlayers.length + (byeMode == ByeMode.none ? 0 : effectiveByeCount));
+      final roundCount = max(1, log(slotCount) ~/ log(2));
+
       for (var round = 0; round < roundCount; round++) {
         final matchCount = slotCount ~/ pow(2, round).toInt() ~/ 2;
         for (var slot = 0; slot < matchCount; slot++) {
@@ -625,10 +678,80 @@ class _TournamentController extends ChangeNotifier {
               group: group,
               round: round,
               slot: slot,
-              playerA: round == 0 ? slots[slot * 2] : null,
-              playerB: round == 0 ? slots[slot * 2 + 1] : null,
             ),
           );
+        }
+      }
+
+      if (effectiveByeCount > 0 && byeMode != ByeMode.none) {
+        final byes = [
+          ...groupPlayers.sublist(0, min(effectiveByeCount, groupPlayers.length)),
+        ];
+        final unseededPlayers = groupPlayers.sublist(min(effectiveByeCount, groupPlayers.length));
+
+        final realMatchPairs = <List<_Player>>[];
+        var idx = 0;
+        while (idx + 1 < unseededPlayers.length) {
+          realMatchPairs.add([unseededPlayers[idx], unseededPlayers[idx + 1]]);
+          idx += 2;
+        }
+        if (idx < unseededPlayers.length) {
+          byes.add(unseededPlayers[idx]);
+        }
+
+        _Match round1At(int slot) => matches.firstWhere(
+              (m) => m.group == group && m.round == 1 && m.slot == slot,
+            );
+        _Match round0At(int slot) => matches.firstWhere(
+              (m) => m.group == group && m.round == 0 && m.slot == slot,
+            );
+
+        final pairedCount = min(byes.length, realMatchPairs.length);
+        var round1Slot = 0;
+        for (var i = 0; i < pairedCount; i++) {
+          round1At(round1Slot).playerA = byes[i].id;
+          final feeder = round0At(round1Slot * 2 + 1);
+          feeder.playerA = realMatchPairs[i][0].id;
+          feeder.playerB = realMatchPairs[i][1].id;
+          round1Slot++;
+        }
+
+        for (var i = pairedCount; i < byes.length; i += 2) {
+          final target = round1At(round1Slot);
+          target.playerA = byes[i].id;
+          if (i + 1 < byes.length) target.playerB = byes[i + 1].id;
+          round1Slot++;
+        }
+
+        for (var i = pairedCount; i < realMatchPairs.length; i += 2) {
+          final feederA = round0At(round1Slot * 2);
+          feederA.playerA = realMatchPairs[i][0].id;
+          feederA.playerB = realMatchPairs[i][1].id;
+          if (i + 1 < realMatchPairs.length) {
+            final feederB = round0At(round1Slot * 2 + 1);
+            feederB.playerA = realMatchPairs[i + 1][0].id;
+            feederB.playerB = realMatchPairs[i + 1][1].id;
+          }
+          round1Slot++;
+        }
+      } else {
+        final slots = List<String?>.filled(slotCount, null);
+        var playerCursor = 0;
+        var matchCursor = 0;
+
+        if (groupPlayers.length.isOdd) {
+          slots[0] = groupPlayers[playerCursor++].id;
+          matchCursor++;
+        }
+        while (playerCursor < groupPlayers.length) {
+          slots[matchCursor * 2] = groupPlayers[playerCursor++].id;
+          slots[matchCursor * 2 + 1] = groupPlayers[playerCursor++].id;
+          matchCursor++;
+        }
+
+        for (var match in matches.where((m) => m.group == group && m.round == 0)) {
+          match.playerA = slots[match.slot * 2];
+          match.playerB = slots[match.slot * 2 + 1];
         }
       }
     }
@@ -755,6 +878,8 @@ class _TournamentController extends ChangeNotifier {
     swissAdvanceConfigured = false;
     _seconds = 0;
     status = _TournamentStatus.setup;
+    byeMode = ByeMode.automatic;
+    customByeCount = 0;
     notifyListeners();
   }
 
@@ -892,6 +1017,8 @@ class _TournamentController extends ChangeNotifier {
       rounds: swissRounds,
       bracketCount: bracketCount,
       status: status,
+      byeMode: byeMode,
+      customByeCount: customByeCount,
     );
   }
 
@@ -910,6 +1037,8 @@ class _TournamentController extends ChangeNotifier {
     swissRounds = snapshot.rounds;
     bracketCount = snapshot.bracketCount;
     status = snapshot.status;
+    byeMode = snapshot.byeMode;
+    customByeCount = snapshot.customByeCount;
   }
 
   void _syncActiveStageSnapshot() {
@@ -1202,6 +1331,8 @@ class _TournamentController extends ChangeNotifier {
             : 1,
         bracketCount: 1,
         status: _TournamentStatus.stopped,
+        byeMode: ByeMode.automatic,
+        customByeCount: 0,
       );
       if (type == BracketType.swiss && stage.players.isNotEmpty) {
         _swissStage = stage;
@@ -1847,8 +1978,12 @@ class _TournamentPanelState extends State<TournamentPanel> {
               if (_controller.isSwiss) ...[
                 _swissRoundsSelector(),
                 _swissAdvanceSelector(),
-              ] else
+              ] else ...[
                 _bracketTypeSelector(),
+                _byeModeSelector(),
+                if (_controller.byeMode == ByeMode.custom)
+                  _customByeSelector(),
+              ],
             ],
           ),
         ],
@@ -1910,6 +2045,52 @@ class _TournamentPanelState extends State<TournamentPanel> {
       onChanged: _controller.canClear && _controller.players.length >= 2
           ? (next) {
               if (next != null) _controller.setSwissAdvanceCount(next);
+            }
+          : null,
+    );
+  }
+
+  Widget _byeModeSelector() {
+    return _dropdownBox<ByeMode>(
+      value: _controller.byeMode,
+      items: const [
+        DropdownMenuItem(
+          value: ByeMode.none,
+          child: Text('No Byes'),
+        ),
+        DropdownMenuItem(
+          value: ByeMode.automatic,
+          child: Text('Auto Byes'),
+        ),
+        DropdownMenuItem(
+          value: ByeMode.custom,
+          child: Text('Custom Byes'),
+        ),
+      ],
+      onChanged: _controller.canClear
+          ? (value) {
+              if (value != null) _controller.setByeMode(value);
+            }
+          : null,
+    );
+  }
+
+  Widget _customByeSelector() {
+    final maxByes = max(1, _controller.players.length - 1);
+    final currentVal = _controller.customByeCount.clamp(0, maxByes);
+
+    return _dropdownBox<int>(
+      value: currentVal,
+      items: List.generate(
+        maxByes + 1,
+        (index) => DropdownMenuItem(
+          value: index,
+          child: Text('$index Bye${index == 1 ? '' : 's'}'),
+        ),
+      ),
+      onChanged: _controller.canClear && _controller.players.length >= 2
+          ? (value) {
+              if (value != null) _controller.setCustomByeCount(value);
             }
           : null,
     );
@@ -2424,6 +2605,7 @@ class _TournamentPanelState extends State<TournamentPanel> {
                       rounds[index],
                       _roundLabel(rounds[index]),
                       index,
+                      rounds,
                     ),
                   ),
               ],
@@ -2443,8 +2625,48 @@ class _TournamentPanelState extends State<TournamentPanel> {
     };
   }
 
-  Widget _buildRoundColumn(List<_Match> round, String label, int roundIndex) {
+  Widget _buildRoundColumn(
+    List<_Match> round,
+    String label,
+    int roundIndex,
+    List<List<_Match>> allRounds,
+  ) {
     final visibleMatches = round.where(_hasVisibleContent).toList();
+
+    // Determine if this round is complete (all matches scored/played)
+    final bool isThisRoundComplete =
+        visibleMatches.isNotEmpty && visibleMatches.every((m) => m.isComplete);
+
+    // Calculate how many preceding consecutive rounds are finished
+    int finishedPrecedingRounds = 0;
+    for (int r = 0; r < roundIndex; r++) {
+      final precedingMatches = allRounds[r].where(_hasVisibleContent).toList();
+      if (precedingMatches.isNotEmpty &&
+          precedingMatches.every((m) => m.isComplete)) {
+        finishedPrecedingRounds++;
+      } else {
+        break;
+      }
+    }
+
+    // Dynamic Top & Bottom spacing adjustment
+    final double topMargin;
+    final double matchSpacing;
+
+    if (isThisRoundComplete || finishedPrecedingRounds == roundIndex) {
+      if (isThisRoundComplete) {
+        topMargin = 0;
+        matchSpacing = 8;
+      } else {
+        topMargin = 0;
+        matchSpacing = 8;
+      }
+    } else {
+      final effectivePowerIndex = roundIndex - finishedPrecedingRounds;
+      topMargin = (pow(2, effectivePowerIndex - 1) * 56) - 28;
+      matchSpacing = (pow(2, effectivePowerIndex) * 56) - 48;
+    }
+
     return SizedBox(
       width: 190,
       child: Column(
@@ -2460,19 +2682,13 @@ class _TournamentPanelState extends State<TournamentPanel> {
           ),
           const SizedBox(height: 8),
           Padding(
-            padding: EdgeInsets.only(
-              top: roundIndex == 0 ? 0 : (pow(2, roundIndex - 1) * 56) - 28,
-            ),
+            padding: EdgeInsets.only(top: topMargin),
             child: Column(
               children: [
                 for (final (idx, match) in visibleMatches.indexed)
                   Padding(
                     padding: EdgeInsets.only(
-                      bottom: idx == visibleMatches.length - 1
-                          ? 0
-                          : roundIndex == 0
-                              ? 8
-                              : (pow(2, roundIndex) * 56) - 48,
+                      bottom: idx == visibleMatches.length - 1 ? 0 : matchSpacing,
                     ),
                     child: _buildMatchCard(match),
                   ),
