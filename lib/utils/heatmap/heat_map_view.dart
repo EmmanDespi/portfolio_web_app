@@ -3,6 +3,8 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter_map/flutter_map.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:geolocator/geolocator.dart'
+    show Geolocator, LocationAccuracy, LocationPermission, LocationSettings;
 import 'package:latlong2/latlong.dart' show LatLng;
 import 'package:portfolio/utils/heatmap/brutal.dart';
 import 'package:portfolio/utils/heatmap/heat_data.dart';
@@ -38,6 +40,9 @@ class _HeatMapViewState extends ConsumerState<HeatMapView> {
 
   Timer? _viewportTimer;
 
+  LatLng? _me; // the user's last found location
+  bool _locating = false;
+
   // Province polygons are expensive to build, so they are cached and only
   // rebuilt when their inputs change (not on every pan/zoom frame).
   List<Polygon> _provPolys = const [];
@@ -70,6 +75,63 @@ class _HeatMapViewState extends ConsumerState<HeatMapView> {
   void _zoomBy(double d) {
     final cam = _map.camera;
     _map.move(cam.center, (cam.zoom + d).clamp(4.0, 19.0));
+  }
+
+  void _toast(String msg) {
+    if (!mounted) return;
+    ScaffoldMessenger.maybeOf(context)
+      ?..hideCurrentSnackBar()
+      ..showSnackBar(SnackBar(content: Text(msg)));
+  }
+
+  /// Finds the user's position, zooms to it and selects it so the detail
+  /// panel shows the local heat index and nearby cool-down spots.
+  Future<void> _locate() async {
+    if (_locating) return;
+    setState(() => _locating = true);
+    try {
+      if (!await Geolocator.isLocationServiceEnabled()) {
+        _toast('Location services are turned off.');
+        return;
+      }
+      var perm = await Geolocator.checkPermission();
+      if (perm == LocationPermission.denied) {
+        perm = await Geolocator.requestPermission();
+      }
+      if (perm == LocationPermission.denied ||
+          perm == LocationPermission.deniedForever) {
+        _toast('Location permission was denied. Allow it in your browser or '
+            'device settings to use this button.');
+        return;
+      }
+
+      final pos = await Geolocator.getCurrentPosition(
+        locationSettings: const LocationSettings(
+          accuracy: LocationAccuracy.high,
+          timeLimit: Duration(seconds: 15),
+        ),
+      );
+      if (!mounted) return;
+
+      final ll = LatLng(pos.latitude, pos.longitude);
+      setState(() => _me = ll);
+      _map.move(ll, 15);
+
+      final province = widget.geo.hit(
+        widget.geo.project(ll.longitude, ll.latitude),
+      );
+      ref.read(selectionProvider.notifier).select(
+            Selection(
+              lat: ll.latitude,
+              lon: ll.longitude,
+              province: province?.name ?? 'Your location',
+            ),
+          );
+    } catch (_) {
+      _toast('Could not get your location. Please try again.');
+    } finally {
+      if (mounted) setState(() => _locating = false);
+    }
   }
 
   void _onTap(LatLng ll) {
@@ -217,6 +279,19 @@ class _HeatMapViewState extends ConsumerState<HeatMapView> {
                       ink: p.ink,
                     ),
                   ),
+                if (_me != null)
+                  Marker(
+                    point: _me!,
+                    width: 20,
+                    height: 20,
+                    child: Container(
+                      decoration: BoxDecoration(
+                        color: const Color(0xFF2F80ED),
+                        shape: BoxShape.circle,
+                        border: Border.all(color: Colors.white, width: 3),
+                      ),
+                    ),
+                  ),
                 if (selection != null)
                   Marker(
                     point: LatLng(selection.lat, selection.lon),
@@ -263,6 +338,12 @@ class _HeatMapViewState extends ConsumerState<HeatMapView> {
                 icon: Icons.center_focus_strong,
                 tooltip: 'Reset view',
                 onTap: () => _map.move(_phCenter, _phZoom),
+              ),
+              const SizedBox(height: 6),
+              BrutalButton(
+                icon: _locating ? Icons.hourglass_top : Icons.my_location,
+                tooltip: 'My location',
+                onTap: _locate,
               ),
             ],
           ),

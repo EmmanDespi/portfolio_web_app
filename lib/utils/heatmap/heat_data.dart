@@ -132,8 +132,11 @@ class GridWeatherService {
 // Nearby places — OpenStreetMap via the Overpass API
 // ═══════════════════════════════════════════════════════════
 class PlacesService {
-  static const _host = 'overpass-api.de';
-  static const _tiers = [1500, 5000, 15000];
+  /// Public Overpass servers; the next one is tried if one fails or is busy.
+  static const _hosts = ['overpass-api.de', 'overpass.kumi.systems'];
+
+  /// Small radii first so the nearest places are found before the result cap.
+  static const _tiers = [500, 1500, 5000, 15000];
 
   /// Nearest place of each [PlaceKind], widening the search radius only for
   /// kinds that haven't been found yet.
@@ -163,6 +166,22 @@ class PlacesService {
     return NearbyResult(nearest: found, failed: failed);
   }
 
+  Future<http.Response> _post(String query) async {
+    Object? last;
+    for (final host in _hosts) {
+      try {
+        final res = await http
+            .post(Uri.https(host, '/api/interpreter'), body: {'data': query})
+            .timeout(const Duration(seconds: 15));
+        if (res.statusCode == 200) return res;
+        last = http.ClientException('$host returned ${res.statusCode}');
+      } catch (e) {
+        last = e;
+      }
+    }
+    throw last ?? http.ClientException('Overpass unavailable');
+  }
+
   Future<List<Place>> _query(
     double lat,
     double lon,
@@ -175,14 +194,9 @@ class PlacesService {
         parts.write('nwr$f(around:$radius,$lat,$lon);');
       }
     }
-    final query = '[out:json][timeout:20];($parts);out center 150;';
+    final query = '[out:json][timeout:12];($parts);out center 300;';
 
-    final res = await http
-        .post(Uri.https(_host, '/api/interpreter'), body: {'data': query})
-        .timeout(const Duration(seconds: 25));
-    if (res.statusCode != 200) {
-      throw http.ClientException('Overpass returned ${res.statusCode}');
-    }
+    final res = await _post(query);
 
     final elements = (jsonDecode(res.body) as Map)['elements'] as List? ?? [];
     final out = <Place>[];
@@ -197,11 +211,14 @@ class PlacesService {
       final pLon = (e['lon'] ?? center?['lon']) as num?;
       if (pLat == null || pLon == null) continue;
 
-      final name = (tags['name'] as String?)?.trim();
+      final rawName = tags['name'] ?? tags['brand'];
+      final name = rawName is String ? rawName.trim() : null;
       out.add(
         Place(
           kind: kind,
-          name: (name == null || name.isEmpty) ? 'Unnamed ${kind.label.toLowerCase()}' : name,
+          name: (name == null || name.isEmpty)
+              ? 'Unnamed ${kind.label.toLowerCase()}'
+              : name,
           lat: pLat.toDouble(),
           lon: pLon.toDouble(),
           distanceM: haversineM(lat, lon, pLat.toDouble(), pLon.toDouble()),
@@ -212,10 +229,22 @@ class PlacesService {
   }
 
   PlaceKind? _kindOf(Map tags) {
-    if (tags['shop'] == 'convenience') return PlaceKind.convenience;
-    if (tags['shop'] == 'mall') return PlaceKind.mall;
-    if (tags['amenity'] == 'cafe') return PlaceKind.cafe;
-    if (tags['amenity'] == 'drinking_water') return PlaceKind.water;
+    switch (tags['shop']) {
+      case 'convenience':
+        return PlaceKind.convenience;
+      case 'supermarket':
+        return PlaceKind.supermarket;
+      case 'mall':
+        return PlaceKind.mall;
+    }
+    switch (tags['amenity']) {
+      case 'restaurant':
+        return PlaceKind.restaurant;
+      case 'fast_food':
+        return PlaceKind.fastFood;
+      case 'cafe':
+        return PlaceKind.cafe;
+    }
     return null;
   }
 }

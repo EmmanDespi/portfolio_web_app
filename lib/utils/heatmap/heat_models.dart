@@ -147,6 +147,7 @@ class Selection {
   final String province;
 }
 
+/// Air-conditioned places where people can cool off or grab a cold drink.
 enum PlaceKind {
   convenience(
     'Convenience store',
@@ -155,15 +156,29 @@ enum PlaceKind {
     5000,
     ['["shop"="convenience"]'],
   ),
-  mall('Mall', 'M', Color(0xFFE5B8F4), 15000, ['["shop"="mall"]']),
-  cafe('Café', 'C', _yellow, 5000, ['["amenity"="cafe"]']),
-  water(
-    'Drinking water',
-    'W',
+  supermarket(
+    'Supermarket',
+    'G',
     _skyBlue,
-    1500,
-    ['["amenity"="drinking_water"]'],
-  );
+    5000,
+    ['["shop"="supermarket"]'],
+  ),
+  mall('Mall', 'M', Color(0xFFE5B8F4), 15000, ['["shop"="mall"]']),
+  restaurant(
+    'Restaurant',
+    'R',
+    _orange,
+    5000,
+    ['["amenity"="restaurant"]'],
+  ),
+  fastFood(
+    'Fast food',
+    'F',
+    AppColors.coral,
+    5000,
+    ['["amenity"="fast_food"]'],
+  ),
+  cafe('Café', 'C', _yellow, 5000, ['["amenity"="cafe"]']);
 
   const PlaceKind(
     this.label,
@@ -221,4 +236,42 @@ double haversineM(double lat1, double lon1, double lat2, double lon2) {
           math.cos(rad(lat2)) *
           math.pow(math.sin(dLon / 2), 2);
   return 2 * r * math.asin(math.min(1.0, math.sqrt(a)));
+}
+
+/// Practical heat-safety suggestions for the given heat-index band.
+List<String> safetyTips(HeatBand band, WeatherReading r) {
+  final i = heatIndexBands.indexOf(band);
+  final tips = <String>[];
+
+  if (i <= 0) {
+    tips.add('Conditions are fairly comfortable. Still carry water if you will '
+        'be outside for long.');
+    return tips;
+  }
+
+  tips.add('Drink water regularly, even before you feel thirsty.');
+  tips.add('Wear light, loose, light-colored clothes and use a hat or umbrella.');
+
+  if (i >= 2) {
+    tips.add('Avoid strenuous outdoor activity from 10 AM to 4 PM. Rest in '
+        'shade or air-conditioned places often.');
+    tips.add('Go easy on sugary drinks, alcohol and too much caffeine.');
+  }
+  if (i >= 3) {
+    tips.add('Move outdoor work or exercise to early morning or evening.');
+    tips.add('Heat exhaustion signs: heavy sweating, dizziness, headache, '
+        'nausea, cramps. Get somewhere cool and drink water.');
+    tips.add('Confusion, hot dry skin or fainting may be heat stroke. '
+        'It is an emergency: call 911 or local emergency services.');
+  }
+  if (i >= 4) {
+    tips.add('Stay indoors in a cool place and go out only if essential.');
+  }
+  if (r.humidity >= 70) {
+    tips.add('Humidity is high, so sweat evaporates slowly and it feels '
+        'hotter. Take more cooling breaks.');
+  }
+  tips.add('Check on children, older adults and people with health '
+      'conditions. Never leave kids or pets in a parked car.');
+  return tips;
 }

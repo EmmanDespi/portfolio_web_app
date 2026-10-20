@@ -120,8 +120,8 @@ class HeatDetailPanel extends ConsumerWidget {
       return BrutalBox(
         color: p.card,
         child: Text(
-          'Tap a province on the map to see its heat index and the nearest '
-          'convenience store, mall, café or drinking water.',
+          'Tap anywhere on the map to see the heat index, safety tips and the '
+          'nearest air-conditioned places to cool off.',
           style: _body(context),
         ),
       );
@@ -169,7 +169,7 @@ class HeatDetailPanel extends ConsumerWidget {
             padding: EdgeInsets.symmetric(vertical: AppSpacing.sm),
             child: Divider(),
           ),
-          Text('NEAREST COOL-DOWN SPOTS', style: _label(context, size: 13)),
+          Text('AIR-CONDITIONED SPOTS NEARBY', style: _label(context, size: 13)),
           const SizedBox(height: AppSpacing.sm),
           nearby.when(
             loading: () => const _Loading('Searching nearby…'),
@@ -269,6 +269,14 @@ class _WeatherBlock extends StatelessWidget {
           const SizedBox(height: 6),
           Text('As of ${reading.timeLabel} PHT', style: _body(context, size: 11)),
         ],
+        const SizedBox(height: AppSpacing.sm),
+        Text('STAY SAFE', style: _label(context)),
+        const SizedBox(height: 4),
+        for (final tip in safetyTips(band, reading))
+          Padding(
+            padding: const EdgeInsets.only(bottom: 4),
+            child: Text('•  $tip', style: _body(context, size: 12)),
+          ),
       ],
     );
   }
@@ -280,10 +288,8 @@ class _NearbyBlock extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final found = [
-      for (final k in PlaceKind.values)
-        if (result.nearest[k] != null) result.nearest[k]!,
-    ];
+    final found = result.nearest.values.toList()
+      ..sort((a, b) => a.distanceM.compareTo(b.distanceM));
 
     if (found.isEmpty) {
       return Text(
@@ -297,6 +303,15 @@ class _NearbyBlock extends StatelessWidget {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
+        Padding(
+          padding: const EdgeInsets.only(bottom: AppSpacing.sm),
+          child: Text(
+            'Closest: ${found.first.name} (${found.first.distanceLabel}). '
+            'A good place to rest in the cool or grab a cold drink. '
+            'Most are air-conditioned, but not all, so check when you arrive.',
+            style: _body(context, size: 12),
+          ),
+        ),
         for (final place in found)
           Padding(
             padding: const EdgeInsets.only(bottom: AppSpacing.sm),
