@@ -174,7 +174,7 @@ class _HeatMapViewState extends ConsumerState<HeatMapView> {
                         .color)
                 .withAlpha(alpha),
             borderColor: ink.withAlpha(120),
-            borderStrokeWidth: 0.6,
+            borderStrokeWidth: 1.0,
           ),
     ];
     _cGeo = widget.geo;
@@ -214,7 +214,7 @@ class _HeatMapViewState extends ConsumerState<HeatMapView> {
               points: ring,
               color: Colors.transparent,
               borderColor: p.ink,
-              borderStrokeWidth: 2.5,
+              borderStrokeWidth: 0.5,
             ),
     ];
 
@@ -282,8 +282,8 @@ class _HeatMapViewState extends ConsumerState<HeatMapView> {
                 if (_me != null)
                   Marker(
                     point: _me!,
-                    width: 20,
-                    height: 20,
+                    width: 16,
+                    height: 16,
                     child: Container(
                       decoration: BoxDecoration(
                         color: const Color(0xFF2F80ED),
@@ -295,13 +295,13 @@ class _HeatMapViewState extends ConsumerState<HeatMapView> {
                 if (selection != null)
                   Marker(
                     point: LatLng(selection.lat, selection.lon),
-                    width: 22,
-                    height: 22,
+                    width: 16,
+                    height: 16,
                     child: Container(
                       decoration: BoxDecoration(
                         color: AppColors.lime,
                         shape: BoxShape.circle,
-                        border: Border.all(color: p.ink, width: 2.5),
+                        border: Border.all(color: p.ink, width: 0.5),
                       ),
                     ),
                   ),
@@ -372,7 +372,7 @@ class _TempBubble extends StatelessWidget {
       decoration: BoxDecoration(
         color: color.withAlpha(220),
         shape: BoxShape.circle,
-        border: Border.all(color: ink, width: 1.5),
+        border: Border.all(color: ink, width: 0.5),
       ),
       alignment: Alignment.center,
       child: Text(
