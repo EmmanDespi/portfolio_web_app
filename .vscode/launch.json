@@ -1,0 +1,11 @@
+{
+  "version": "0.2.0",
+  "configurations": [
+    {
+      "name": "portfolio (web)",
+      "request": "launch",
+      "type": "dart",
+      "args": ["--dart-define=CARTO_KEY=cb1_4plo_1_f707ea37da1da3b238aa04f6"]
+    }
+  ]
+}

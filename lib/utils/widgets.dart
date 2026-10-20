@@ -8,7 +8,7 @@ import 'dart:math';
 // ─────────────────────────────────────────────────────────────
 class AppColors {
   /// Vivid orange – primary CTA accent (peach / primary).
-  static const Color peach = Color(0xFFFE8254);
+  static const Color peach = Color(0xFFEF6249);
 
   /// Muted teal-navy – text, borders, dividers (dsBlue).
   static const Color dsBlue = Color.fromARGB(255, 56, 81, 90);
@@ -1496,63 +1496,62 @@ class NeoBadge extends StatelessWidget {
   }
 }
 
-// ─────────────────────────────────────────────────────────────
-// AVATAR  (DATA DISPLAY: AVATARS)
-// Circular avatar with neomorphic ring.
-// ─────────────────────────────────────────────────────────────
-class NeoAvatar extends StatelessWidget {
-  final String? imageUrl;
-  final String initials;
-  final double size;
-  final AppTheme? theme;
+// // ─────────────────────────────────────────────────────────────
+// // AVATAR  (DATA DISPLAY: AVATARS)
+// // Circular avatar with neomorphic ring.
+// // ─────────────────────────────────────────────────────────────
+// class NeoAvatar extends StatelessWidget {
+//   final String? imageUrl;
+//   final String initials;
+//   final double size;
+//   final bool isDark;
 
-  const NeoAvatar({
-    super.key,
-    this.imageUrl,
-    required this.initials,
-    this.size = 52,
-    this.theme,
-  });
+//   const NeoAvatar({
+//     super.key,
+//     this.imageUrl,
+//     required this.initials,
+//     this.size = 52,
+//     this.isDark = false,
+//   });
 
-  @override
-  Widget build(BuildContext context) {
-    final surface = theme?.surface ?? AppColors.oatmilk;
-    return Container(
-      width: size,
-      height: size,
-      decoration: BoxDecoration(
-        shape: BoxShape.circle,
-        color: surface,
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withValues(alpha: 0.25),
-            offset: const Offset(2, 2),
-            blurRadius: 5,
-          ),
-          BoxShadow(
-            color: Colors.white.withValues(alpha: 0.7),
-            offset: const Offset(-2, -2),
-            blurRadius: 5,
-          ),
-        ],
-      ),
-      child: imageUrl != null
-          ? ClipOval(
-              child: Image.network(imageUrl!,
-                  width: size, height: size, fit: BoxFit.cover))
-          : Center(
-              child: Text(
-                initials,
-                style: TextStyle(
-                  color: AppColors.peach,
-                  fontWeight: FontWeight.w700,
-                  fontSize: size * 0.35,
-                ),
-              ),
-            ),
-    );
-  }
-}
+//   @override
+//   Widget build(BuildContext context) {
+//     return Container(
+//       width: size,
+//       height: size,
+//       decoration: BoxDecoration(
+//         shape: BoxShape.circle,
+//         color: surface,
+//         boxShadow: [
+//           BoxShadow(
+//             color: Colors.black.withValues(alpha: 0.25),
+//             offset: const Offset(2, 2),
+//             blurRadius: 5,
+//           ),
+//           BoxShadow(
+//             color: Colors.white.withValues(alpha: 0.7),
+//             offset: const Offset(-2, -2),
+//             blurRadius: 5,
+//           ),
+//         ],
+//       ),
+//       child: imageUrl != null
+//           ? ClipOval(
+//               child: Image.network(imageUrl!,
+//                   width: size, height: size, fit: BoxFit.cover))
+//           : Center(
+//               child: Text(
+//                 initials,
+//                 style: TextStyle(
+//                   color: AppColors.peach,
+//                   fontWeight: FontWeight.w700,
+//                   fontSize: size * 0.35,
+//                 ),
+//               ),
+//             ),
+//     );
+//   }
+// }
 
 // ─────────────────────────────────────────────────────────────
 // TOOLTIP  (DATA DISPLAY: TOOLTIP)

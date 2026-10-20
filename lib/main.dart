@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:portfolio/pages/heatmap_page.dart';
 import 'package:portfolio/pages/tournament_page.dart';
 import 'utils/globalData.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -37,6 +38,10 @@ class MyApp extends StatelessWidget {
         GoRoute(
           path: '/tournament',
           builder: (context, state) => const TournamentPage(),
+        ),
+        GoRoute(
+          path: '/heatmap',
+          builder: (context, state) => const HeatmapPage(),
         ),
       ],
     );

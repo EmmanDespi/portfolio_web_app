@@ -7,13 +7,11 @@ import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
+import 'utils/app_theme.dart';
 import 'utils/csv_downloader.dart';
-import 'utils/widgets.dart';
 
 class TournamentPanel extends StatefulWidget {
-  final AppTheme theme;
-
-  const TournamentPanel({super.key, required this.theme});
+  const TournamentPanel({super.key});
 
   @override
   State<TournamentPanel> createState() => _TournamentPanelState();
@@ -1523,12 +1521,21 @@ extension _FirstOrNull<T> on Iterable<T> {
   }
 }
 
+// ─────────────────────────────────────────────────────────────────────────────
+// UI
+// ─────────────────────────────────────────────────────────────────────────────
+
 class _TournamentPanelState extends State<TournamentPanel> {
   final _controller = _TournamentController();
   final _playerController = TextEditingController();
   final _playerCountController = TextEditingController(text: '8');
   late FocusNode _playerFocusNode;
   bool _completionPromptShown = false;
+
+  // Bracket geometry. A match card is two 30px slots + 2px divider + 4px border.
+  static const double _slotHeight = 30;
+  static const double _matchHeight = 66;
+  static const double _matchUnit = 76; // card height + vertical gap
 
   @override
   void initState() {
@@ -1557,34 +1564,227 @@ class _TournamentPanelState extends State<TournamentPanel> {
     super.dispose();
   }
 
+  // ── Design primitives ──────────────────────────────────────────────────────
+
+  BoxDecoration _brut({
+    Color color = AppColors.white,
+    double shadow = 4,
+    double border = 2,
+    Color borderColor = AppColors.ink,
+  }) {
+    return BoxDecoration(
+      color: color,
+      border: Border.all(color: borderColor, width: border),
+      boxShadow: shadow > 0
+          ? [BoxShadow(color: AppColors.ink, offset: Offset(shadow, shadow))]
+          : null,
+    );
+  }
+
+  Widget _eyebrow(String text, {Color color = AppColors.muted}) {
+    return Text(
+      text.toUpperCase(),
+      style: TextStyle(
+        color: color,
+        fontSize: 11,
+        fontWeight: FontWeight.w800,
+        letterSpacing: 1.4,
+      ),
+    );
+  }
+
+  InputDecoration _input({String? label, String? hint, Widget? suffixIcon}) {
+    const side = BorderSide(color: AppColors.ink, width: 2);
+    return InputDecoration(
+      labelText: label,
+      hintText: hint,
+      labelStyle: const TextStyle(color: AppColors.muted),
+      hintStyle: const TextStyle(color: AppColors.muted),
+      filled: true,
+      fillColor: AppColors.white,
+      isDense: true,
+      suffixIcon: suffixIcon,
+      contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 14),
+      border: const OutlineInputBorder(
+        borderRadius: BorderRadius.zero,
+        borderSide: side,
+      ),
+      enabledBorder: const OutlineInputBorder(
+        borderRadius: BorderRadius.zero,
+        borderSide: side,
+      ),
+      disabledBorder: const OutlineInputBorder(
+        borderRadius: BorderRadius.zero,
+        borderSide: BorderSide(color: AppColors.line, width: 2),
+      ),
+      focusedBorder: const OutlineInputBorder(
+        borderRadius: BorderRadius.zero,
+        borderSide: BorderSide(color: AppColors.ink, width: 3),
+      ),
+    );
+  }
+
+  Widget _btn(
+    IconData icon,
+    String label,
+    VoidCallback? onPressed, {
+    bool primary = false,
+    bool danger = false,
+  }) {
+    final enabled = onPressed != null;
+    final bg = !enabled
+        ? AppColors.paper
+        : danger
+            ? AppColors.coral
+            : primary
+                ? AppColors.lime
+                : AppColors.white;
+    final fg = !enabled
+        ? AppColors.muted
+        : danger
+            ? AppColors.white
+            : AppColors.ink;
+    return Container(
+      decoration: BoxDecoration(
+        border: Border.all(
+          color: enabled ? AppColors.ink : AppColors.line,
+          width: 2,
+        ),
+        boxShadow: enabled
+            ? const [BoxShadow(color: AppColors.ink, offset: Offset(3, 3))]
+            : null,
+      ),
+      child: Material(
+        color: bg,
+        child: InkWell(
+          onTap: onPressed,
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Icon(icon, size: 16, color: fg),
+                const SizedBox(width: 6),
+                Text(
+                  label,
+                  style: TextStyle(
+                    color: fg,
+                    fontSize: 12,
+                    fontWeight: FontWeight.w800,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _dropdownBox<T>({
+    required T? value,
+    required List<DropdownMenuItem<T>> items,
+    required ValueChanged<T?>? onChanged,
+    String? hint,
+  }) {
+    final enabled = onChanged != null;
+    return Container(
+      height: 42,
+      padding: const EdgeInsets.symmetric(horizontal: 12),
+      decoration: BoxDecoration(
+        color: enabled ? AppColors.white : AppColors.paper,
+        border: Border.all(
+          color: enabled ? AppColors.ink : AppColors.line,
+          width: 2,
+        ),
+      ),
+      child: DropdownButtonHideUnderline(
+        child: DropdownButton<T>(
+          value: value,
+          hint: hint == null
+              ? null
+              : Text(
+                  hint,
+                  style: const TextStyle(
+                    color: AppColors.muted,
+                    fontSize: 12,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+          items: items,
+          onChanged: onChanged,
+          dropdownColor: AppColors.white,
+          iconEnabledColor: AppColors.ink,
+          iconDisabledColor: AppColors.line,
+          style: const TextStyle(
+            color: AppColors.ink,
+            fontSize: 12,
+            fontWeight: FontWeight.w800,
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _dialog({required Widget child, double? width}) {
+    return Dialog(
+      backgroundColor: Colors.transparent,
+      elevation: 0,
+      insetPadding: const EdgeInsets.all(AppSpacing.md),
+      child: Container(
+        width: width,
+        padding: const EdgeInsets.all(AppSpacing.md),
+        decoration: _brut(shadow: 6, border: 3),
+        child: child,
+      ),
+    );
+  }
+
+  Widget _dialogTitle(String text) => Text(
+        text,
+        style: const TextStyle(
+          color: AppColors.ink,
+          fontSize: 22,
+          height: 1.05,
+          fontWeight: FontWeight.w900,
+        ),
+      );
+
+  // ── Layout ─────────────────────────────────────────────────────────────────
+
   @override
   Widget build(BuildContext context) {
     return LayoutBuilder(
       builder: (context, constraints) {
         final compact = constraints.maxWidth < 720;
-        return SingleChildScrollView(
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              _buildHeader(compact),
-              const SizedBox(height: 16),
-              _buildControlPanel(compact),
-              const SizedBox(height: 16),
-              if (_controller.hasStageTabs) ...[
-                _buildStageTabs(),
-                const SizedBox(height: 16),
+        return Container(
+          color: AppColors.paper,
+          child: SingleChildScrollView(
+            padding: EdgeInsets.all(compact ? AppSpacing.sm : AppSpacing.md),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                _buildHeader(compact),
+                const SizedBox(height: AppSpacing.md),
+                _buildControlPanel(compact),
+                const SizedBox(height: AppSpacing.md),
+                if (_controller.hasStageTabs) ...[
+                  _buildStageTabs(),
+                  const SizedBox(height: AppSpacing.md),
+                ],
+                if (_controller.players.isNotEmpty) ...[
+                  _buildRoster(),
+                  const SizedBox(height: AppSpacing.md),
+                ],
+                if (_controller.matches.isEmpty)
+                  _buildEmptyState()
+                else if (_controller.isSwiss)
+                  _buildSwissRounds()
+                else
+                  _buildBracketContainer(compact),
+                const SizedBox(height: AppSpacing.lg),
               ],
-              if (_controller.players.isNotEmpty) ...[
-                _buildRoster(),
-                const SizedBox(height: 16),
-              ],
-              if (_controller.matches.isEmpty)
-                _buildEmptyState()
-              else if (_controller.isSwiss)
-                _buildSwissRounds()
-              else
-                _buildBracketContainer(compact),
-            ],
+            ),
           ),
         );
       },
@@ -1601,7 +1801,7 @@ class _TournamentPanelState extends State<TournamentPanel> {
             type: BracketType.swiss,
           ),
         ),
-        const SizedBox(width: 8),
+        const SizedBox(width: AppSpacing.sm),
         Expanded(
           child: _stageTab(
             label: 'Single Elimination',
@@ -1614,35 +1814,46 @@ class _TournamentPanelState extends State<TournamentPanel> {
 
   Widget _stageTab({required String label, required BracketType type}) {
     final selected = _controller.bracketType == type;
-    return OutlinedButton.icon(
-      onPressed: selected ? null : () => _switchStage(type),
-      icon: Icon(
-        type == BracketType.swiss
-            ? Icons.table_rows_outlined
-            : Icons.account_tree_outlined,
-        size: 16,
-        color: selected ? widget.theme.textSecondary : widget.theme.textPrimary,
+    final fg = selected ? AppColors.white : AppColors.ink;
+    return Container(
+      decoration: BoxDecoration(
+        border: Border.all(color: AppColors.ink, width: 2),
+        boxShadow: selected
+            ? null
+            : const [BoxShadow(color: AppColors.ink, offset: Offset(3, 3))],
       ),
-      label: Text(
-        label,
-        style: TextStyle(
-          fontSize: 14,
-          color: selected
-              ? widget.theme.textSecondary
-              : widget.theme.textPrimary,
+      child: Material(
+        color: selected ? AppColors.ink : AppColors.white,
+        child: InkWell(
+          onTap: selected ? null : () => _switchStage(type),
+          child: Padding(
+            padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 8),
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                Icon(
+                  type == BracketType.swiss
+                      ? Icons.table_rows_outlined
+                      : Icons.account_tree_outlined,
+                  size: 16,
+                  color: selected ? AppColors.lime : fg,
+                ),
+                const SizedBox(width: 8),
+                Flexible(
+                  child: Text(
+                    label,
+                    overflow: TextOverflow.ellipsis,
+                    style: TextStyle(
+                      color: fg,
+                      fontSize: 13,
+                      fontWeight: FontWeight.w800,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
         ),
-      ),
-      style: OutlinedButton.styleFrom(
-        backgroundColor: selected
-            ? widget.theme.accent.withValues(alpha: 0.15)
-            : widget.theme.surface,
-        foregroundColor: selected
-            ? widget.theme.accent
-            : widget.theme.textPrimary,
-        side: BorderSide(
-          color: selected ? widget.theme.accent : widget.theme.border,
-        ),
-        padding: const EdgeInsets.symmetric(vertical: 10),
       ),
     );
   }
@@ -1653,37 +1864,36 @@ class _TournamentPanelState extends State<TournamentPanel> {
   }
 
   Widget _buildHeader(bool compact) {
-    return Column(
+    return Row(
       crossAxisAlignment: CrossAxisAlignment.start,
+      mainAxisAlignment: MainAxisAlignment.spaceBetween,
       children: [
-        Row(
-          mainAxisAlignment: MainAxisAlignment.spaceBetween,
-          children: [
-            Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  _controller.isSwiss ? 'Swiss Rounds' : 'Tournament Bracket',
-                  style: TextStyle(
-                    color: widget.theme.textSecondary,
-                    fontSize: 24,
-                    fontWeight: FontWeight.w700,
-                    letterSpacing: -0.5,
-                  ),
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              _eyebrow(_controller.tournamentName),
+              const SizedBox(height: 4),
+              Text(
+                _controller.isSwiss ? 'Swiss Rounds' : 'Tournament Bracket',
+                style: TextStyle(
+                  color: AppColors.ink,
+                  fontSize: compact ? 26 : 34,
+                  height: 1.0,
+                  fontWeight: FontWeight.w900,
                 ),
-                const SizedBox(height: 6),
-                Row(
-                  children: [
-                    _statusBadge(),
-                    const SizedBox(width: 12),
-                    _playerCountIndicator(),
-                  ],
-                ),
-              ],
-            ),
-            _timerDisplay(),
-          ],
+              ),
+              const SizedBox(height: AppSpacing.sm),
+              Wrap(
+                spacing: AppSpacing.sm,
+                runSpacing: AppSpacing.xs,
+                children: [_statusBadge(), _playerCountIndicator()],
+              ),
+            ],
+          ),
         ),
+        const SizedBox(width: AppSpacing.sm),
+        _timerDisplay(),
       ],
     );
   }
@@ -1697,58 +1907,63 @@ class _TournamentPanelState extends State<TournamentPanel> {
       _TournamentStatus.stopped => 'FINISHED',
       _TournamentStatus.completed => 'COMPLETE',
     };
-    final bgColor = switch (status) {
-      _TournamentStatus.setup => widget.theme.surface,
-      _TournamentStatus.running => AppColors.success.withValues(alpha: 0.15),
-      _TournamentStatus.paused => AppColors.warning.withValues(alpha: 0.15),
-      _TournamentStatus.stopped => widget.theme.surface,
-      _TournamentStatus.completed => AppColors.success.withValues(alpha: 0.15),
+    final bg = switch (status) {
+      _TournamentStatus.setup => AppColors.white,
+      _TournamentStatus.running => AppColors.lime,
+      _TournamentStatus.paused => AppColors.coral,
+      _TournamentStatus.stopped => AppColors.ink,
+      _TournamentStatus.completed => AppColors.lime,
     };
-    final textColor = switch (status) {
-      _TournamentStatus.setup => widget.theme.textPrimary,
-      _TournamentStatus.running => AppColors.success,
-      _TournamentStatus.paused => AppColors.warning,
-      _TournamentStatus.stopped => widget.theme.textSecondary,
-      _TournamentStatus.completed => AppColors.success,
+    final fg = switch (status) {
+      _TournamentStatus.paused || _TournamentStatus.stopped => AppColors.white,
+      _ => AppColors.ink,
     };
 
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-      decoration: BoxDecoration(
-        color: bgColor,
-        border: Border.all(color: textColor.withValues(alpha: 0.3)),
-        borderRadius: BorderRadius.circular(6),
-      ),
-      child: Text(
-        label,
-        style: TextStyle(
-          color: textColor,
-          fontSize: 11,
-          fontWeight: FontWeight.w700,
-          letterSpacing: 1,
-        ),
+      decoration: _brut(color: bg, shadow: 0),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          if (status == _TournamentStatus.running) ...[
+            Container(
+              width: 8,
+              height: 8,
+              decoration: const BoxDecoration(
+                color: AppColors.coral,
+                shape: BoxShape.circle,
+              ),
+            ),
+            const SizedBox(width: 6),
+          ],
+          Text(
+            label,
+            style: TextStyle(
+              color: fg,
+              fontSize: 11,
+              fontWeight: FontWeight.w900,
+              letterSpacing: 1.2,
+            ),
+          ),
+        ],
       ),
     );
   }
 
   Widget _playerCountIndicator() {
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-      decoration: BoxDecoration(
-        color: widget.theme.surface,
-        border: Border.all(color: widget.theme.border),
-        borderRadius: BorderRadius.circular(6),
-      ),
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+      decoration: _brut(shadow: 0),
       child: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
-          Icon(Icons.person, size: 22, color: widget.theme.accent),
+          const Icon(Icons.person, size: 18, color: AppColors.ink),
           const SizedBox(width: 6),
           Text(
             '${_controller.players.length}',
-            style: TextStyle(
-              color: widget.theme.accent,
-              fontWeight: FontWeight.w700,
+            style: const TextStyle(
+              color: AppColors.ink,
+              fontWeight: FontWeight.w900,
             ),
           ),
         ],
@@ -1759,23 +1974,24 @@ class _TournamentPanelState extends State<TournamentPanel> {
   Widget _timerDisplay() {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
-      decoration: BoxDecoration(
-        color: widget.theme.surface,
-        border: Border.all(color: widget.theme.border),
-        borderRadius: BorderRadius.circular(6),
+      decoration: _brut(color: AppColors.ink, shadow: 4, borderColor: AppColors.ink)
+          .copyWith(
+        boxShadow: const [
+          BoxShadow(color: AppColors.lime, offset: Offset(4, 4)),
+        ],
       ),
       child: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
-          Icon(Icons.timer_outlined, size: 18, color: widget.theme.accent),
+          const Icon(Icons.timer_outlined, size: 18, color: AppColors.lime),
           const SizedBox(width: 8),
           Text(
             _controller.elapsedLabel,
-            style: TextStyle(
-              color: widget.theme.textPrimary,
-              fontSize: 14,
-              fontWeight: FontWeight.w700,
-              fontFeatures: const [FontFeature.tabularFigures()],
+            style: const TextStyle(
+              color: AppColors.white,
+              fontSize: 18,
+              fontWeight: FontWeight.w900,
+              fontFeatures: [FontFeature.tabularFigures()],
             ),
           ),
         ],
@@ -1788,7 +2004,7 @@ class _TournamentPanelState extends State<TournamentPanel> {
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
         _buildRosterControls(compact),
-        const SizedBox(height: 12),
+        const SizedBox(height: AppSpacing.sm),
         _buildTournamentControls(compact),
       ],
     );
@@ -1796,69 +2012,45 @@ class _TournamentPanelState extends State<TournamentPanel> {
 
   Widget _buildRosterControls(bool compact) {
     return Container(
-      padding: const EdgeInsets.all(12),
-      decoration: BoxDecoration(
-        color: widget.theme.surface.withValues(alpha: 0.5),
-        border: Border.all(color: widget.theme.border),
-        borderRadius: BorderRadius.circular(6),
-      ),
+      padding: const EdgeInsets.all(AppSpacing.sm),
+      decoration: _brut(),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text(
-            'Roster',
-            style: TextStyle(
-              color: widget.theme.textSecondary,
-              fontSize: 11,
-              fontWeight: FontWeight.w700,
-              letterSpacing: 1,
-            ),
-          ),
-          const SizedBox(height: 10),
+          _eyebrow('Roster'),
+          const SizedBox(height: AppSpacing.sm),
           TextField(
             enabled: _controller.canClear,
             onChanged: _controller.setTournamentName,
-            style: TextStyle(color: widget.theme.textSecondary, fontSize: 13),
-            decoration: InputDecoration(
-              labelText: 'Tournament name',
-              labelStyle: TextStyle(color: widget.theme.textSecondary),
-              filled: true,
-              fillColor: widget.theme.background2,
-              border: const OutlineInputBorder(),
-            ),
+            style: const TextStyle(color: AppColors.ink, fontSize: 14),
+            decoration: _input(label: 'Tournament name'),
           ),
-          const SizedBox(height: 10),
-          Row(
+          const SizedBox(height: AppSpacing.sm),
+          Wrap(
+            spacing: AppSpacing.sm,
+            runSpacing: AppSpacing.sm,
+            crossAxisAlignment: WrapCrossAlignment.center,
             children: [
               SizedBox(
-                width: 120,
+                width: 130,
                 child: TextField(
                   controller: _playerCountController,
                   enabled: _controller.canClear,
                   keyboardType: TextInputType.number,
-                  style: TextStyle(
-                    color: widget.theme.textSecondary,
-                    fontSize: 13,
-                  ),
-                  decoration: InputDecoration(
-                    labelText: 'Player count',
-                    labelStyle: TextStyle(color: widget.theme.textSecondary),
-                    filled: true,
-                    fillColor: widget.theme.background2,
-                    border: const OutlineInputBorder(),
-                  ),
+                  style: const TextStyle(color: AppColors.ink, fontSize: 14),
+                  decoration: _input(label: 'Player count'),
                 ),
               ),
-              const SizedBox(width: 8),
-              _compactButton(
+              _btn(
                 Icons.people_outline,
                 'Generate Players',
                 _controller.canClear ? _generateNumberedPlayers : null,
               ),
             ],
           ),
-          const SizedBox(height: 10),
+          const SizedBox(height: AppSpacing.sm),
           Row(
+            crossAxisAlignment: CrossAxisAlignment.center,
             children: [
               Expanded(
                 child: TextField(
@@ -1867,44 +2059,26 @@ class _TournamentPanelState extends State<TournamentPanel> {
                   enabled: _controller.canClear,
                   textInputAction: TextInputAction.go,
                   onSubmitted: (_) => _addPlayer(),
-                  style: TextStyle(
-                    color: widget.theme.textSecondary,
-                    fontSize: 13,
-                  ),
-                  decoration: InputDecoration(
-                    hintText: 'Add player name',
-                    hintStyle: TextStyle(color: widget.theme.textSecondary),
-                    filled: true,
-                    fillColor: widget.theme.background2,
-                    border: OutlineInputBorder(
-                      borderSide: BorderSide(color: widget.theme.border),
-                      borderRadius: BorderRadius.circular(4),
-                    ),
-                    enabledBorder: OutlineInputBorder(
-                      borderSide: BorderSide(color: widget.theme.border),
-                      borderRadius: BorderRadius.circular(4),
-                    ),
-                    contentPadding: const EdgeInsets.symmetric(
-                      horizontal: 12,
-                      vertical: 10,
-                    ),
+                  style: const TextStyle(color: AppColors.ink, fontSize: 14),
+                  decoration: _input(
+                    hint: 'Add player name',
                     suffixIcon: _controller.canClear
                         ? IconButton(
-                            icon: const Icon(Icons.add),
+                            icon: const Icon(Icons.add, color: AppColors.ink),
                             onPressed: _addPlayer,
                           )
                         : null,
                   ),
                 ),
               ),
-              const SizedBox(width: 10),
-              _compactButton(
+              const SizedBox(width: AppSpacing.sm),
+              _btn(
                 Icons.upload_file,
                 'Import',
                 _controller.canClear ? _import : null,
               ),
-              const SizedBox(width: 8),
-              _compactButton(
+              const SizedBox(width: AppSpacing.sm),
+              _btn(
                 Icons.delete_outline,
                 'Clear',
                 _controller.canClear && _controller.players.isNotEmpty
@@ -1921,44 +2095,33 @@ class _TournamentPanelState extends State<TournamentPanel> {
   Widget _buildTournamentControls(bool compact) {
     final hasRoster = _controller.players.length >= 2;
     return Container(
-      padding: const EdgeInsets.all(12),
-      decoration: BoxDecoration(
-        color: widget.theme.surface.withValues(alpha: 0.5),
-        border: Border.all(color: widget.theme.border),
-        borderRadius: BorderRadius.circular(6),
-      ),
+      padding: const EdgeInsets.all(AppSpacing.sm),
+      decoration: _brut(),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text(
-            'Tournament Controls',
-            style: TextStyle(
-              color: widget.theme.textSecondary,
-              fontSize: 11,
-              fontWeight: FontWeight.w700,
-              letterSpacing: 1,
-            ),
-          ),
-          const SizedBox(height: 10),
+          _eyebrow('Tournament Controls'),
+          const SizedBox(height: AppSpacing.sm),
           Wrap(
-            spacing: 8,
-            runSpacing: 8,
+            spacing: AppSpacing.sm,
+            runSpacing: AppSpacing.sm,
+            crossAxisAlignment: WrapCrossAlignment.center,
             children: [
-              _compactButton(
+              _btn(
                 Icons.shuffle,
                 _controller.isSwiss ? 'Build rounds' : 'Build bracket',
                 hasRoster && _controller.canClear
                     ? () => _controller.generateBracket()
                     : null,
               ),
-              _compactButton(
+              _btn(
                 Icons.casino,
                 'Randomize',
                 hasRoster && _controller.canClear
                     ? _controller.randomizeSeeding
                     : null,
               ),
-              _compactButton(
+              _btn(
                 Icons.play_arrow,
                 'Start',
                 hasRoster &&
@@ -1966,15 +2129,16 @@ class _TournamentPanelState extends State<TournamentPanel> {
                         _controller.status != _TournamentStatus.running
                     ? _controller.start
                     : null,
+                primary: true,
               ),
-              _compactButton(
+              _btn(
                 Icons.pause,
                 'Pause',
                 _controller.status == _TournamentStatus.running
                     ? _controller.pause
                     : null,
               ),
-              _compactButton(
+              _btn(
                 Icons.stop,
                 'Stop',
                 (_controller.status == _TournamentStatus.running ||
@@ -1983,7 +2147,7 @@ class _TournamentPanelState extends State<TournamentPanel> {
                     : null,
                 danger: true,
               ),
-              _compactButton(
+              _btn(
                 Icons.add_circle_outline,
                 'New Tournament',
                 (_controller.status == _TournamentStatus.stopped ||
@@ -1991,22 +2155,21 @@ class _TournamentPanelState extends State<TournamentPanel> {
                     ? _controller.startNewTournament
                     : null,
               ),
-              _compactButton(
+              _btn(
                 Icons.table_view,
                 'Export CSV',
                 _controller.hasExportData ? _controller.exportCsv : null,
               ),
-              _compactButton(
+              _btn(
                 Icons.history,
                 'History',
                 _controller.hasHistory ? _showHistoryDialog : null,
               ),
+              _bracketTypeSelector(),
               if (_controller.isSwiss) ...[
-                _bracketTypeSelector(),
                 _swissRoundsSelector(),
                 _swissAdvanceSelector(),
               ] else ...[
-                _bracketTypeSelector(),
                 _byeModeSelector(),
                 if (_controller.byeMode == ByeMode.custom)
                   _customByeSelector(),
@@ -2014,27 +2177,6 @@ class _TournamentPanelState extends State<TournamentPanel> {
             ],
           ),
         ],
-      ),
-    );
-  }
-
-  Widget _compactButton(
-    IconData icon,
-    String label,
-    VoidCallback? onPressed, {
-    bool danger = false,
-  }) {
-    return ElevatedButton.icon(
-      onPressed: onPressed,
-      icon: Icon(icon, size: 16),
-      label: Text(label, style: const TextStyle(fontSize: 12)),
-      style: ElevatedButton.styleFrom(
-        backgroundColor: danger ? AppColors.danger : widget.theme.surface,
-        foregroundColor: danger ? Colors.white : widget.theme.textPrimary,
-        disabledBackgroundColor: widget.theme.surface.withValues(alpha: 0.4),
-        disabledForegroundColor: widget.theme.textSecondary,
-        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 9),
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(4)),
       ),
     );
   }
@@ -2081,18 +2223,9 @@ class _TournamentPanelState extends State<TournamentPanel> {
     return _dropdownBox<ByeMode>(
       value: _controller.byeMode,
       items: const [
-        DropdownMenuItem(
-          value: ByeMode.none,
-          child: Text('No Byes'),
-        ),
-        DropdownMenuItem(
-          value: ByeMode.automatic,
-          child: Text('Auto Byes'),
-        ),
-        DropdownMenuItem(
-          value: ByeMode.custom,
-          child: Text('Custom Byes'),
-        ),
+        DropdownMenuItem(value: ByeMode.none, child: Text('No Byes')),
+        DropdownMenuItem(value: ByeMode.automatic, child: Text('Auto Byes')),
+        DropdownMenuItem(value: ByeMode.custom, child: Text('Custom Byes')),
       ],
       onChanged: _controller.canClear
           ? (value) {
@@ -2123,181 +2256,143 @@ class _TournamentPanelState extends State<TournamentPanel> {
     );
   }
 
-  Widget _dropdownBox<T>({
-    required T value,
-    required List<DropdownMenuItem<T>> items,
-    required ValueChanged<T?>? onChanged,
-  }) {
-    return Container(
-      height: 40,
-      padding: const EdgeInsets.symmetric(horizontal: 10),
-      decoration: BoxDecoration(
-        color: widget.theme.background,
-        border: Border.all(color: widget.theme.border),
-        borderRadius: BorderRadius.circular(4),
-      ),
-      child: DropdownButtonHideUnderline(
-        child: DropdownButton<T>(
-          value: value,
-          items: items,
-          onChanged: onChanged,
-          dropdownColor: widget.theme.surface,
-          style: TextStyle(color: widget.theme.textPrimary, fontSize: 12),
-        ),
-      ),
-    );
-  }
-
   Widget _bracketTypeSelector() {
-    return Container(
-      height: 40,
-      padding: const EdgeInsets.symmetric(horizontal: 15, vertical: 8),
-      decoration: BoxDecoration(
-        color: widget.theme.background,
-        border: Border.all(color: widget.theme.border),
-        borderRadius: BorderRadius.circular(4),
-      ),
-      child: DropdownButtonHideUnderline(
-        child: DropdownButton<BracketType>(
-          value: _controller.bracketType,
-          hint: Text(
-            'Select Format',
-            style: TextStyle(color: widget.theme.textPrimary, fontSize: 12),
-          ),
-          dropdownColor: widget.theme.surface,
-          style: TextStyle(color: widget.theme.textPrimary, fontSize: 12),
-          items: const [
-            DropdownMenuItem(
-              value: BracketType.singleElimination,
-              child: Text('Single Elim'),
-            ),
-            DropdownMenuItem(value: BracketType.swiss, child: Text('Swiss')),
-          ],
-          onChanged: _controller.canClear && _controller.players.length >= 2
-              ? (value) async {
-                  if (value != null) {
-                    await Future.delayed(const Duration(milliseconds: 10));
-                    _controller.setBracketType(value);
-                  }
-                }
-              : null,
+    return _dropdownBox<BracketType>(
+      value: _controller.bracketType,
+      hint: 'Select Format',
+      items: const [
+        DropdownMenuItem(
+          value: BracketType.singleElimination,
+          child: Text('Single Elim'),
         ),
-      ),
+        DropdownMenuItem(value: BracketType.swiss, child: Text('Swiss')),
+      ],
+      onChanged: _controller.canClear && _controller.players.length >= 2
+          ? (value) async {
+              if (value != null) {
+                await Future.delayed(const Duration(milliseconds: 10));
+                _controller.setBracketType(value);
+              }
+            }
+          : null,
     );
   }
 
   Widget _buildRoster() {
-    return Material(
-      type: MaterialType.card,
-      borderRadius: BorderRadius.circular(6),
-      color: widget.theme.surface.withValues(alpha: 0.5),
-      child: ExpansionTile(
-        title: Text(
-          'Players List',
-          style: TextStyle(
-            color: widget.theme.textSecondary,
-            fontSize: 14,
-            fontWeight: FontWeight.bold,
-            letterSpacing: 1,
-          ),
-        ),
-        maintainState: true,
-        children: [
-          SizedBox(
-            height: 450,
-            child: GridView.builder(
-              shrinkWrap: false,
-              physics: const AlwaysScrollableScrollPhysics(),
-              itemCount: _controller.players.length,
-              padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 12),
-              cacheExtent: 160,
-              gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-                crossAxisCount: 3,
-                crossAxisSpacing: 6,
-                mainAxisSpacing: 6,
-                mainAxisExtent: 40,
-              ),
-              itemBuilder: (context, index) {
-                final player = _controller.players[index];
-                return Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 4),
-                  decoration: BoxDecoration(
-                    color: widget.theme.surface.withValues(alpha: 0.5),
-                    borderRadius: BorderRadius.circular(4),
-                    border: Border.all(
-                      color: widget.theme.border.withValues(alpha: 0.4),
+    return Container(
+      decoration: _brut(),
+      child: Theme(
+        data: Theme.of(context).copyWith(dividerColor: Colors.transparent),
+        child: ExpansionTile(
+          iconColor: AppColors.ink,
+          collapsedIconColor: AppColors.ink,
+          tilePadding: const EdgeInsets.symmetric(horizontal: AppSpacing.sm),
+          title: _eyebrow('Players List', color: AppColors.ink),
+          maintainState: true,
+          children: [
+            Container(height: 2, color: AppColors.ink),
+            SizedBox(
+              height: 450,
+              child: GridView.builder(
+                shrinkWrap: false,
+                physics: const AlwaysScrollableScrollPhysics(),
+                itemCount: _controller.players.length,
+                padding: const EdgeInsets.all(AppSpacing.sm),
+                cacheExtent: 160,
+                gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+                  crossAxisCount: 3,
+                  crossAxisSpacing: 8,
+                  mainAxisSpacing: 8,
+                  mainAxisExtent: 44,
+                ),
+                itemBuilder: (context, index) {
+                  final player = _controller.players[index];
+                  return Container(
+                    padding:
+                        const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                    decoration: _brut(
+                      color: AppColors.paper,
+                      shadow: 0,
+                      border: 1.5,
                     ),
-                  ),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: [
-                      Text(
-                        player.name,
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        style: TextStyle(
-                          color: widget.theme.textPrimary,
-                          fontSize: 12,
-                          fontWeight: FontWeight.w700,
-                        ),
-                      ),
-                      if (_controller.showSeeding)
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
                         Text(
-                          'Seed: ${player.seed}',
-                          style: TextStyle(
-                            color: widget.theme.textPrimary,
-                            fontSize: 9,
+                          player.name,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: const TextStyle(
+                            color: AppColors.ink,
+                            fontSize: 12,
+                            fontWeight: FontWeight.w800,
                           ),
                         ),
-                    ],
-                  ),
-                );
-              },
+                        if (_controller.showSeeding)
+                          Text(
+                            'SEED ${player.seed}',
+                            style: const TextStyle(
+                              color: AppColors.muted,
+                              fontSize: 9,
+                              fontWeight: FontWeight.w700,
+                              letterSpacing: 0.8,
+                            ),
+                          ),
+                      ],
+                    ),
+                  );
+                },
+              ),
             ),
-          ),
-        ],
+          ],
+        ),
       ),
     );
   }
 
   Widget _buildEmptyState() {
+    final needsPlayers = _controller.players.length < 2;
     return Container(
-      padding: const EdgeInsets.symmetric(vertical: 40, horizontal: 20),
-      decoration: BoxDecoration(
-        color: widget.theme.surface.withValues(alpha: 0.3),
-        border: Border.all(color: widget.theme.border),
-        borderRadius: BorderRadius.circular(6),
+      padding: const EdgeInsets.symmetric(
+        vertical: AppSpacing.xl,
+        horizontal: AppSpacing.md,
       ),
+      decoration: _brut(),
       child: Column(
         children: [
-          Icon(
-            Icons.account_tree_outlined,
-            size: 40,
-            color: widget.theme.accent,
+          Container(
+            padding: const EdgeInsets.all(14),
+            decoration: _brut(color: AppColors.lime, shadow: 3),
+            child: const Icon(
+              Icons.account_tree_outlined,
+              size: 32,
+              color: AppColors.ink,
+            ),
           ),
-          const SizedBox(height: 12),
+          const SizedBox(height: AppSpacing.md),
           Text(
-            _controller.players.length < 2
+            needsPlayers
                 ? 'Add at least 2 players to begin'
                 : _controller.isSwiss
                     ? 'Build Swiss rounds to start the tournament'
                     : 'Build a bracket to start the tournament',
-            style: TextStyle(
-              color: widget.theme.textPrimary,
-              fontSize: 14,
-              fontWeight: FontWeight.w600,
+            textAlign: TextAlign.center,
+            style: const TextStyle(
+              color: AppColors.ink,
+              fontSize: 19,
+              fontWeight: FontWeight.w800,
             ),
           ),
-          const SizedBox(height: 6),
+          const SizedBox(height: AppSpacing.xs),
           Text(
-            _controller.players.length < 2
+            needsPlayers
                 ? 'Enter player names above to get started.'
                 : _controller.isSwiss
                     ? 'Choose the number of rounds, then build the tournament.'
                     : 'Click "Build bracket" to generate the tournament tree.',
             textAlign: TextAlign.center,
-            style: TextStyle(color: widget.theme.textSecondary, fontSize: 12),
+            style: const TextStyle(color: AppColors.muted, fontSize: 14),
           ),
         ],
       ),
@@ -2320,20 +2415,17 @@ class _TournamentPanelState extends State<TournamentPanel> {
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
           _buildBracketInfo(),
-          const SizedBox(height: 12),
-          Container(
-            padding: const EdgeInsets.all(30),
+          const SizedBox(height: AppSpacing.sm),
+          const Padding(
+            padding: EdgeInsets.all(30),
             child: Center(
-              child: Icon(
-                Icons.brush_outlined,
-                size: 64,
-                color: widget.theme.textSecondary,
-              ),
+              child: Icon(Icons.brush_outlined, size: 64, color: AppColors.muted),
             ),
           ),
           Text(
             '${_controller.players.length} players - scroll to view bracket',
-            style: TextStyle(color: widget.theme.textPrimary, fontSize: 14),
+            textAlign: TextAlign.center,
+            style: const TextStyle(color: AppColors.ink, fontSize: 14),
           ),
         ],
       );
@@ -2343,7 +2435,7 @@ class _TournamentPanelState extends State<TournamentPanel> {
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
         _buildBracketInfo(),
-        const SizedBox(height: 12),
+        const SizedBox(height: AppSpacing.sm),
         ...groups.map((group) => _buildGroupContainer(group)),
       ],
     );
@@ -2351,22 +2443,22 @@ class _TournamentPanelState extends State<TournamentPanel> {
 
   Widget _buildBracketInfo() {
     return Container(
-      padding: const EdgeInsets.all(10),
-      decoration: BoxDecoration(
-        color: widget.theme.accent.withValues(alpha: 0.08),
-        border: Border.all(color: widget.theme.accent.withValues(alpha: 0.3)),
-        borderRadius: BorderRadius.circular(6),
-      ),
+      padding: const EdgeInsets.all(AppSpacing.sm),
+      decoration: _brut(color: AppColors.lime, shadow: 0),
       child: Row(
         children: [
-          Icon(Icons.info_outline, size: 16, color: widget.theme.accent),
+          const Icon(Icons.info_outline, size: 16, color: AppColors.ink),
           const SizedBox(width: 8),
           Expanded(
             child: Text(
               _controller.customMatching && _controller.canClear
                   ? 'Drag players to swap positions in first round only'
                   : 'Click a player to advance them, or drag winners to later matches',
-              style: TextStyle(color: widget.theme.textSecondary, fontSize: 11),
+              style: const TextStyle(
+                color: AppColors.ink,
+                fontSize: 12,
+                fontWeight: FontWeight.w700,
+              ),
             ),
           ),
         ],
@@ -2386,45 +2478,57 @@ class _TournamentPanelState extends State<TournamentPanel> {
         Row(
           children: [
             Expanded(child: _buildBracketInfo()),
-            const SizedBox(width: 8),
-            _compactButton(Icons.leaderboard, 'Standings', () {
+            const SizedBox(width: AppSpacing.sm),
+            _btn(Icons.leaderboard, 'Standings', () {
               _showStandingsDialog(showProceed: _controller.swissComplete);
             }),
           ],
         ),
-        const SizedBox(height: 12),
+        const SizedBox(height: AppSpacing.sm),
         SingleChildScrollView(
           scrollDirection: Axis.horizontal,
+          padding: const EdgeInsets.only(right: 6, bottom: 6),
           child: Row(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               for (final round in orderedRounds)
                 Container(
-                  width: 210,
-                  margin: const EdgeInsets.only(right: 12),
-                  padding: const EdgeInsets.all(10),
-                  decoration: BoxDecoration(
-                    color: const Color(0xFF303030),
-                    border: Border.all(color: const Color(0xFF444444)),
-                    borderRadius: BorderRadius.circular(3),
-                  ),
+                  width: 214,
+                  margin: const EdgeInsets.only(right: AppSpacing.sm),
+                  padding: const EdgeInsets.all(AppSpacing.sm),
+                  decoration: _brut(),
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.stretch,
                     children: [
-                      Text(
-                        'Round $round${round == _controller.swissRound ? '  •  LIVE' : ''}',
-                        style: const TextStyle(
-                          color: Colors.white,
-                          fontSize: 12,
-                          fontWeight: FontWeight.w700,
-                        ),
+                      Row(
+                        children: [
+                          _eyebrow('Round $round', color: AppColors.ink),
+                          const SizedBox(width: 8),
+                          if (round == _controller.swissRound)
+                            Container(
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 6,
+                                vertical: 2,
+                              ),
+                              color: AppColors.lime,
+                              child: const Text(
+                                'LIVE',
+                                style: TextStyle(
+                                  color: AppColors.ink,
+                                  fontSize: 10,
+                                  fontWeight: FontWeight.w900,
+                                  letterSpacing: 1,
+                                ),
+                              ),
+                            ),
+                        ],
                       ),
-                      const SizedBox(height: 10),
+                      const SizedBox(height: AppSpacing.sm),
                       for (final match
                           in rounds[round]!
                             ..sort((a, b) => a.slot.compareTo(b.slot)))
                         Padding(
-                          padding: const EdgeInsets.only(bottom: 10),
+                          padding: const EdgeInsets.only(bottom: 12),
                           child: _buildMatchCard(match),
                         ),
                     ],
@@ -2454,38 +2558,43 @@ class _TournamentPanelState extends State<TournamentPanel> {
     final standings = _controller.swissStandings;
     return showDialog<bool>(
       context: context,
-      builder: (context) => _wireDialog(
+      builder: (context) => _dialog(
         width: dashboardWidth,
         child: Column(
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            Text(
-              '${_controller.tournamentName} standings',
-              style: TextStyle(
-                color: widget.theme.textPrimary,
-                fontSize: 20,
-                fontWeight: FontWeight.w700,
-              ),
-            ),
+            _dialogTitle('${_controller.tournamentName} standings'),
             if (showProceed) ...[
-              const SizedBox(height: 8),
+              const SizedBox(height: AppSpacing.xs),
               Text(
                 'Top ${_controller.swissAdvanceCount} players are marked to advance.',
-                style: TextStyle(
-                  color: widget.theme.textSecondary,
-                  fontSize: 12,
-                ),
+                style: const TextStyle(color: AppColors.muted, fontSize: 13),
               ),
             ],
-            const SizedBox(height: 16),
-            SizedBox(
+            const SizedBox(height: AppSpacing.md),
+            Container(
+              decoration: BoxDecoration(
+                border: Border.all(color: AppColors.ink, width: 2),
+              ),
               height: MediaQuery.of(context).size.height * 0.5,
               child: SingleChildScrollView(
                 scrollDirection: Axis.vertical,
                 child: SingleChildScrollView(
                   scrollDirection: Axis.horizontal,
                   child: DataTable(
+                    headingRowColor:
+                        const WidgetStatePropertyAll(AppColors.ink),
+                    headingTextStyle: const TextStyle(
+                      color: AppColors.white,
+                      fontWeight: FontWeight.w800,
+                      fontSize: 12,
+                    ),
+                    dataTextStyle: const TextStyle(
+                      color: AppColors.ink,
+                      fontSize: 13,
+                    ),
+                    dividerThickness: 1,
                     columns: const [
                       DataColumn(label: Text('#')),
                       DataColumn(label: Text('Advance')),
@@ -2500,23 +2609,30 @@ class _TournamentPanelState extends State<TournamentPanel> {
                     rows: [
                       for (final (index, standing) in standings.indexed)
                         DataRow(
-                          color: index < _controller.swissAdvanceCount
-                              ? WidgetStatePropertyAll(
-                                  widget.theme.accent.withValues(alpha: 0.12),
-                                )
-                              : null,
+                          color: WidgetStatePropertyAll(
+                            index < _controller.swissAdvanceCount
+                                ? AppColors.lime.withValues(alpha: 0.5)
+                                : AppColors.white,
+                          ),
                           cells: [
                             DataCell(Text('${index + 1}')),
                             DataCell(
                               index < _controller.swissAdvanceCount
-                                  ? Icon(
-                                      Icons.check_circle,
-                                      color: AppColors.success,
+                                  ? const Icon(
+                                      Icons.check_box,
+                                      color: AppColors.ink,
                                       size: 18,
                                     )
                                   : const SizedBox.shrink(),
                             ),
-                            DataCell(Text(standing.player.name)),
+                            DataCell(
+                              Text(
+                                standing.player.name,
+                                style: const TextStyle(
+                                  fontWeight: FontWeight.w800,
+                                ),
+                              ),
+                            ),
                             DataCell(
                               Text('${standing.wins}-${standing.losses}'),
                             ),
@@ -2536,17 +2652,26 @@ class _TournamentPanelState extends State<TournamentPanel> {
                                     Container(
                                       margin: const EdgeInsets.only(right: 3),
                                       padding: const EdgeInsets.symmetric(
-                                        horizontal: 5,
+                                        horizontal: 6,
                                         vertical: 2,
                                       ),
-                                      color: result == 'W'
-                                          ? Colors.green
-                                          : Colors.red,
+                                      decoration: BoxDecoration(
+                                        color: result == 'W'
+                                            ? AppColors.lime
+                                            : AppColors.coral,
+                                        border: Border.all(
+                                          color: AppColors.ink,
+                                          width: 1.5,
+                                        ),
+                                      ),
                                       child: Text(
                                         result,
-                                        style: const TextStyle(
-                                          color: Colors.white,
+                                        style: TextStyle(
+                                          color: result == 'W'
+                                              ? AppColors.ink
+                                              : AppColors.white,
                                           fontSize: 11,
+                                          fontWeight: FontWeight.w900,
                                         ),
                                       ),
                                     ),
@@ -2560,24 +2685,26 @@ class _TournamentPanelState extends State<TournamentPanel> {
                 ),
               ),
             ),
-            const SizedBox(height: 16),
+            const SizedBox(height: AppSpacing.md),
             Align(
               alignment: Alignment.centerRight,
-              child: Row(
-                mainAxisAlignment: MainAxisAlignment.end,
+              child: Wrap(
+                spacing: AppSpacing.sm,
+                runSpacing: AppSpacing.sm,
+                alignment: WrapAlignment.end,
                 children: [
-                  TextButton(
-                    onPressed: () => Navigator.pop(context, false),
-                    child: Text(showProceed ? 'Review later' : 'Close'),
+                  _btn(
+                    Icons.close,
+                    showProceed ? 'Review later' : 'Close',
+                    () => Navigator.pop(context, false),
                   ),
-                  if (showProceed) ...[
-                    const SizedBox(width: 8),
-                    FilledButton.icon(
-                      onPressed: () => Navigator.pop(context, true),
-                      icon: const Icon(Icons.account_tree_outlined, size: 18),
-                      label: const Text('Proceed to single elim'),
+                  if (showProceed)
+                    _btn(
+                      Icons.account_tree_outlined,
+                      'Proceed to single elim',
+                      () => Navigator.pop(context, true),
+                      primary: true,
                     ),
-                  ],
                 ],
               ),
             ),
@@ -2590,43 +2717,35 @@ class _TournamentPanelState extends State<TournamentPanel> {
   Widget _buildGroupContainer(int group) {
     final rounds = _controller.matchesForGroup(group);
     return Container(
-      margin: const EdgeInsets.only(bottom: 12),
-      decoration: BoxDecoration(
-        color: const Color(0xFF303030),
-        border: Border.all(color: const Color(0xFF444444)),
-        borderRadius: BorderRadius.circular(3),
-      ),
+      margin: const EdgeInsets.only(bottom: AppSpacing.md, right: 4),
+      decoration: _brut(),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Container(
-            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-            decoration: BoxDecoration(
-              color: const Color(0xFF292929),
-              border: Border(
-                bottom: BorderSide(color: const Color(0xFF444444)),
-              ),
-            ),
+            width: double.infinity,
+            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+            color: AppColors.ink,
             child: Text(
-              'Bracket ${group + 1}${_controller.bracketCount > 1 ? ' of ${_controller.bracketCount}' : ''}',
-              style: TextStyle(
-                color: widget.theme.accent,
+              'BRACKET ${group + 1}${_controller.bracketCount > 1 ? ' OF ${_controller.bracketCount}' : ''}',
+              style: const TextStyle(
+                color: AppColors.lime,
                 fontSize: 12,
-                fontWeight: FontWeight.w700,
-                letterSpacing: 1,
+                fontWeight: FontWeight.w900,
+                letterSpacing: 1.6,
               ),
             ),
           ),
           SingleChildScrollView(
             scrollDirection: Axis.horizontal,
-            padding: const EdgeInsets.fromLTRB(10, 8, 18, 16),
+            padding: const EdgeInsets.fromLTRB(14, 14, 22, 20),
             child: Row(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 for (var index = 0; index < rounds.length; index++)
                   Padding(
                     padding: EdgeInsets.only(
-                      right: index == rounds.length - 1 ? 0 : 34,
+                      right: index == rounds.length - 1 ? 0 : 36,
                     ),
                     child: _buildRoundColumn(
                       rounds[index],
@@ -2678,33 +2797,22 @@ class _TournamentPanelState extends State<TournamentPanel> {
     final double matchSpacing;
 
     if (isThisRoundComplete || finishedPrecedingRounds == roundIndex) {
-      if (isThisRoundComplete) {
-        topMargin = 0;
-        matchSpacing = 8;
-      } else {
-        topMargin = 0;
-        matchSpacing = 8;
-      }
+      topMargin = 0;
+      matchSpacing = _matchUnit - _matchHeight;
     } else {
       final effectivePowerIndex = roundIndex - finishedPrecedingRounds;
-      topMargin = (pow(2, effectivePowerIndex - 1) * 56) - 28;
-      matchSpacing = (pow(2, effectivePowerIndex) * 56) - 48;
+      topMargin = (pow(2, effectivePowerIndex - 1) * _matchUnit) -
+          (_matchUnit / 2);
+      matchSpacing = (pow(2, effectivePowerIndex) * _matchUnit) - _matchHeight;
     }
 
     return SizedBox(
-      width: 190,
+      width: 200,
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text(
-            label,
-            style: const TextStyle(
-              color: Color(0xFFE7E7E7),
-              fontSize: 10,
-              fontWeight: FontWeight.w700,
-            ),
-          ),
-          const SizedBox(height: 8),
+          _eyebrow(label, color: AppColors.ink),
+          const SizedBox(height: 10),
           Padding(
             padding: EdgeInsets.only(top: topMargin),
             child: Column(
@@ -2747,25 +2855,25 @@ class _TournamentPanelState extends State<TournamentPanel> {
         final highlighted = candidates.isNotEmpty;
         return Container(
           decoration: BoxDecoration(
-            color: highlighted
-                ? const Color(0xFF767676)
-                : const Color(0xFF626262),
+            color: AppColors.white,
             border: Border.all(
-              color: highlighted
-                  ? const Color(0xFFFF742B)
-                  : const Color(0xFF747474),
-              width: highlighted ? 2 : 1,
+              color: highlighted ? AppColors.coral : AppColors.ink,
+              width: highlighted ? 3 : 2,
             ),
-            borderRadius: BorderRadius.circular(2),
+            boxShadow: const [
+              BoxShadow(color: AppColors.ink, offset: Offset(3, 3)),
+            ],
           ),
-          clipBehavior: Clip.antiAlias,
+          clipBehavior: Clip.none,
           child: Column(
             children: [
               _buildPlayerSlot(match, 0),
-              const Divider(height: 1, color: Color(0xFF4E4E4E), thickness: 1),
+              Container(height: 2, color: AppColors.ink),
               _buildPlayerSlot(match, 1),
               if (match.notes != null)
-                Padding(
+                Container(
+                  width: double.infinity,
+                  color: AppColors.paper,
                   padding: const EdgeInsets.symmetric(
                     horizontal: 8,
                     vertical: 3,
@@ -2773,7 +2881,7 @@ class _TournamentPanelState extends State<TournamentPanel> {
                   child: Text(
                     match.notes!,
                     style: const TextStyle(
-                      color: Color(0xFFD0D0D0),
+                      color: AppColors.muted,
                       fontSize: 10,
                       fontStyle: FontStyle.italic,
                     ),
@@ -2791,14 +2899,14 @@ class _TournamentPanelState extends State<TournamentPanel> {
   bool _isMatchReady(_Match match) {
     if (match.isComplete) return false;
     if (match.playerA != null && match.playerB != null) return true;
-    
+
     final feederMatches = _controller.matches.where(
       (feeder) =>
           feeder.group == match.group &&
           feeder.round == match.round - 1 &&
           (feeder.slot == match.slot * 2 || feeder.slot == match.slot * 2 + 1),
     );
-    
+
     if (feederMatches.isEmpty) return match.hasPlayers;
     return feederMatches.every((feeder) => _controller._branchResolved(feeder));
   }
@@ -2811,6 +2919,14 @@ class _TournamentPanelState extends State<TournamentPanel> {
     final score = slot == 0 ? match.scoreA : match.scoreB;
     final bool matchReady = _isMatchReady(match);
 
+    final nameColor = player == null
+        ? AppColors.line
+        : isLoser
+            ? AppColors.muted
+            : matchReady || isWinner
+                ? AppColors.ink
+                : AppColors.muted;
+
     Widget content = InkWell(
       onTap: (!_controller.canClear && matchReady)
           ? () {
@@ -2822,54 +2938,61 @@ class _TournamentPanelState extends State<TournamentPanel> {
             }
           : null,
       child: Container(
-        height: 25,
-        color: isWinner ? const Color(0xFF767676) : const Color(0xFF626262),
+        height: _slotHeight,
+        color: isWinner ? AppColors.lime : AppColors.white,
         child: Row(
           children: [
             Container(
-              width: 25,
+              width: 26,
+              height: double.infinity,
               alignment: Alignment.center,
-              color: const Color(0xFF555555),
+              decoration: const BoxDecoration(
+                color: AppColors.paper,
+                border: Border(
+                  right: BorderSide(color: AppColors.ink, width: 2),
+                ),
+              ),
               child: Text(
                 player == null ? '' : '${player.seed}',
-                style: const TextStyle(color: Color(0xFFCFCFCF), fontSize: 9),
+                style: const TextStyle(
+                  color: AppColors.muted,
+                  fontSize: 10,
+                  fontWeight: FontWeight.w800,
+                ),
               ),
             ),
-            const SizedBox(width: 7),
+            const SizedBox(width: 8),
             Expanded(
               child: Text(
                 player?.name ?? 'Open slot',
                 overflow: TextOverflow.ellipsis,
                 style: TextStyle(
-                  color: player == null
-                      ? const Color(0xFFBDBDBD)
-                      : matchReady
-                          ? Colors.white
-                          : Colors.white38,
-                  fontSize: 11,
-                  fontWeight: FontWeight.w700,
-                ),
-              ),
-            ),
-            Container(
-              width: 25,
-              height: double.infinity,
-              alignment: Alignment.center,
-              color: score != null || isWinner
-                  ? const Color(0xFFFF742B)
-                  : const Color(0xFF767676),
-              child: Text(
-                score?.toString() ?? '0',
-                style: const TextStyle(
-                  color: Color(0xFF222222),
-                  fontSize: 10,
-                  fontWeight: FontWeight.w700,
+                  color: nameColor,
+                  fontSize: 12,
+                  fontWeight: player == null ? FontWeight.w500 : FontWeight.w800,
+                  decoration: isLoser ? TextDecoration.lineThrough : null,
                 ),
               ),
             ),
             if (isWinner)
-              Icon(Icons.check_circle, size: 14, color: AppColors.success),
-            if (isLoser) Icon(Icons.cancel, size: 14, color: AppColors.danger),
+              const Padding(
+                padding: EdgeInsets.only(right: 4),
+                child: Icon(Icons.check, size: 14, color: AppColors.ink),
+              ),
+            Container(
+              width: 28,
+              height: double.infinity,
+              alignment: Alignment.center,
+              color: isWinner ? AppColors.ink : AppColors.paper,
+              child: Text(
+                score?.toString() ?? '0',
+                style: TextStyle(
+                  color: isWinner ? AppColors.lime : AppColors.ink,
+                  fontSize: 12,
+                  fontWeight: FontWeight.w900,
+                ),
+              ),
+            ),
           ],
         ),
       ),
@@ -2907,28 +3030,26 @@ class _TournamentPanelState extends State<TournamentPanel> {
     return Material(
       color: Colors.transparent,
       child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
         decoration: BoxDecoration(
-          color: widget.theme.accent,
-          borderRadius: BorderRadius.circular(4),
-          boxShadow: [
-            BoxShadow(
-              color: Colors.black.withValues(alpha: 0.2),
-              blurRadius: 8,
-              offset: const Offset(0, 2),
-            ),
+          color: AppColors.lime,
+          border: Border.all(color: AppColors.ink, width: 2),
+          boxShadow: const [
+            BoxShadow(color: AppColors.ink, offset: Offset(4, 4)),
           ],
         ),
         child: Text(
           name,
           style: const TextStyle(
-            color: Colors.white,
-            fontWeight: FontWeight.w600,
+            color: AppColors.ink,
+            fontWeight: FontWeight.w800,
           ),
         ),
       ),
     );
   }
+
+  // ── Actions & dialogs ──────────────────────────────────────────────────────
 
   void _addPlayer() {
     _controller.addPlayer(_playerController.text);
@@ -2941,15 +3062,30 @@ class _TournamentPanelState extends State<TournamentPanel> {
     if (count == null || count < 2 || count > 150) {
       showDialog(
         context: context,
-        builder: (context) => AlertDialog(
-          title: const Text("Invalid Player Count"),
-          content: const Text("Number of players must be between 2 and 150."),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.of(context).pop(),
-              child: const Text("OK"),
-            ),
-          ],
+        builder: (context) => _dialog(
+          width: 380,
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              _dialogTitle('Invalid player count'),
+              const SizedBox(height: AppSpacing.sm),
+              const Text(
+                'Number of players must be between 2 and 150.',
+                style: TextStyle(color: AppColors.ink, fontSize: 14),
+              ),
+              const SizedBox(height: AppSpacing.md),
+              Align(
+                alignment: Alignment.centerRight,
+                child: _btn(
+                  Icons.check,
+                  'OK',
+                  () => Navigator.of(context).pop(),
+                  primary: true,
+                ),
+              ),
+            ],
+          ),
         ),
       );
       return;
@@ -2962,62 +3098,48 @@ class _TournamentPanelState extends State<TournamentPanel> {
   Future<void> _showHistoryDialog() async {
     await showDialog<void>(
       context: context,
-      builder: (context) => _wireDialog(
+      builder: (context) => _dialog(
         width: 560,
         child: Column(
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            Text(
-              '${_controller.tournamentName} history',
-              style: TextStyle(
-                color: widget.theme.textPrimary,
-                fontSize: 20,
-                fontWeight: FontWeight.w700,
+            _dialogTitle('${_controller.tournamentName} history'),
+            const SizedBox(height: AppSpacing.md),
+            Container(
+              decoration: BoxDecoration(
+                border: Border.all(color: AppColors.ink, width: 2),
               ),
-            ),
-            const SizedBox(height: 16),
-            ConstrainedBox(
-              constraints: const BoxConstraints(maxHeight: 360),
-              child: ListView.separated(
-                shrinkWrap: true,
-                itemCount: _controller.history.length,
-                separatorBuilder: (_, __) =>
-                    Divider(height: 1, color: widget.theme.border),
-                itemBuilder: (context, index) => Padding(
-                  padding: const EdgeInsets.symmetric(vertical: 8),
-                  child: Text(
-                    _controller.history[index],
-                    style: TextStyle(color: widget.theme.textPrimary),
+              child: ConstrainedBox(
+                constraints: const BoxConstraints(maxHeight: 360),
+                child: ListView.separated(
+                  shrinkWrap: true,
+                  itemCount: _controller.history.length,
+                  separatorBuilder: (_, __) =>
+                      const Divider(height: 1, color: AppColors.line),
+                  itemBuilder: (context, index) => Padding(
+                    padding: const EdgeInsets.symmetric(
+                      vertical: 10,
+                      horizontal: 12,
+                    ),
+                    child: Text(
+                      _controller.history[index],
+                      style: const TextStyle(
+                        color: AppColors.ink,
+                        fontSize: 13,
+                      ),
+                    ),
                   ),
                 ),
               ),
             ),
+            const SizedBox(height: AppSpacing.md),
             Align(
               alignment: Alignment.centerRight,
-              child: TextButton(
-                onPressed: () => Navigator.pop(context),
-                child: const Text('Close'),
-              ),
+              child: _btn(Icons.close, 'Close', () => Navigator.pop(context)),
             ),
           ],
         ),
-      ),
-    );
-  }
-
-  Widget _wireDialog({required Widget child, double? width}) {
-    return Dialog(
-      backgroundColor: Colors.transparent,
-      elevation: 0,
-      insetPadding: const EdgeInsets.all(24),
-      child: WireFrame(
-        width: width,
-        color: widget.theme.surface,
-        border: Border.all(color: widget.theme.border),
-        borderRadius: BorderRadius.circular(4),
-        padding: const EdgeInsets.all(20),
-        child: child,
       ),
     );
   }
@@ -3039,55 +3161,46 @@ class _TournamentPanelState extends State<TournamentPanel> {
 
     final confirmed = await showDialog<bool>(
       context: context,
-      builder: (context) => _wireDialog(
+      builder: (context) => _dialog(
         width: 460,
         child: Column(
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            Text(
-              'Record Match Scores',
-              style: TextStyle(
-                color: widget.theme.textPrimary,
-                fontSize: 20,
-                fontWeight: FontWeight.w700,
-              ),
-            ),
-            const SizedBox(height: 16),
+            _dialogTitle('Record match scores'),
+            const SizedBox(height: AppSpacing.md),
             Row(
               children: [
                 Expanded(
                   child: TextField(
                     controller: scoreAController,
                     keyboardType: TextInputType.number,
-                    decoration: InputDecoration(
-                      labelText: playerAName,
-                    ),
+                    style: const TextStyle(color: AppColors.ink),
+                    decoration: _input(label: playerAName),
                   ),
                 ),
-                const SizedBox(width: 12),
+                const SizedBox(width: AppSpacing.sm),
                 Expanded(
                   child: TextField(
                     controller: scoreBController,
                     keyboardType: TextInputType.number,
-                    decoration: InputDecoration(
-                      labelText: playerBName,
-                    ),
+                    style: const TextStyle(color: AppColors.ink),
+                    decoration: _input(label: playerBName),
                   ),
                 ),
               ],
             ),
-            const SizedBox(height: 16),
+            const SizedBox(height: AppSpacing.md),
             Row(
               mainAxisAlignment: MainAxisAlignment.end,
               children: [
-                TextButton(
-                  onPressed: () => Navigator.pop(context, false),
-                  child: const Text('Cancel'),
-                ),
-                FilledButton(
-                  onPressed: () => Navigator.pop(context, true),
-                  child: const Text('Save result'),
+                _btn(Icons.close, 'Cancel', () => Navigator.pop(context, false)),
+                const SizedBox(width: AppSpacing.sm),
+                _btn(
+                  Icons.check,
+                  'Save result',
+                  () => Navigator.pop(context, true),
+                  primary: true,
                 ),
               ],
             ),
@@ -3096,9 +3209,12 @@ class _TournamentPanelState extends State<TournamentPanel> {
       ),
     );
 
-    if (confirmed != true) return;
     final scoreA = int.tryParse(scoreAController.text) ?? 0;
     final scoreB = int.tryParse(scoreBController.text) ?? 0;
+    scoreAController.dispose();
+    scoreBController.dispose();
+
+    if (confirmed != true) return;
     if (scoreA < 0 || scoreB < 0) return;
 
     _controller.recordSwissScores(match.id, scoreA, scoreB);
@@ -3123,36 +3239,29 @@ class _TournamentPanelState extends State<TournamentPanel> {
 
     final createNext = await showDialog<bool>(
       context: context,
-      builder: (context) => _wireDialog(
+      builder: (context) => _dialog(
         width: 480,
         child: Column(
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            Text(
-              'Tournament stage complete',
-              style: TextStyle(
-                color: widget.theme.textPrimary,
-                fontSize: 20,
-                fontWeight: FontWeight.w700,
-              ),
-            ),
-            const SizedBox(height: 12),
+            _dialogTitle('Tournament stage complete'),
+            const SizedBox(height: AppSpacing.sm),
             Text(
               '${_controller.finalWinners.length} winners are ready. Create next bracket?',
-              style: TextStyle(color: widget.theme.textPrimary),
+              style: const TextStyle(color: AppColors.ink, fontSize: 14),
             ),
-            const SizedBox(height: 12),
+            const SizedBox(height: AppSpacing.md),
             Row(
               mainAxisAlignment: MainAxisAlignment.end,
               children: [
-                TextButton(
-                  onPressed: () => Navigator.pop(context, false),
-                  child: const Text('End'),
-                ),
-                FilledButton(
-                  onPressed: () => Navigator.pop(context, true),
-                  child: const Text('Continue'),
+                _btn(Icons.flag, 'End', () => Navigator.pop(context, false)),
+                const SizedBox(width: AppSpacing.sm),
+                _btn(
+                  Icons.arrow_forward,
+                  'Continue',
+                  () => Navigator.pop(context, true),
+                  primary: true,
                 ),
               ],
             ),
