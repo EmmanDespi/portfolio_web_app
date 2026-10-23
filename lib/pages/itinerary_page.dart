@@ -528,10 +528,10 @@ class _ItineraryPageState extends State<ItineraryPage> {
         builder: (context, setDialogState) => AlertDialog(
           backgroundColor: AppColors.coral,
           title: Text('Pin Location for "${item.controller.text.isEmpty ? "Item" : item.controller.text}"', style: TextStyle(color: AppColors.ink)),
-          contentPadding: const EdgeInsets.all(4),
+          contentPadding: const EdgeInsets.all(2),
           content: WireFrame(
-            width: AppResponsive.isDesktop(context) ? context.screenWidth * 0.4 : context.screenWidth * 0.97,
-            height: AppResponsive.isDesktop(context) ? context.screenHeight * 0.5 : context.screenHeight * 0.3,
+            width: AppResponsive.isDesktop(context) ? context.screenWidth * 0.4 : context.screenWidth,
+            height: AppResponsive.isDesktop(context) ? context.screenHeight * 0.5 : context.screenHeight * 0.7,
             child: Column(
               children: [
                 Row(
@@ -712,7 +712,7 @@ class _ItineraryPageState extends State<ItineraryPage> {
         ),
         body: Center(
           child: Padding(
-            padding: AppResponsive.isDesktop(context) ? EdgeInsetsGeometry.fromLTRB(ref*0.1, 12, ref*0.1, 12) : EdgeInsetsGeometry.all(8),
+            padding: AppResponsive.isDesktop(context) ? EdgeInsetsGeometry.fromLTRB(ref*0.1, 12, ref*0.1, 12) : EdgeInsetsGeometry.all(2),
             child: Column(
               children: [
                 const SizedBox(height: 12),
