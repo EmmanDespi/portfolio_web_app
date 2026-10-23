@@ -425,7 +425,7 @@ class _ItineraryPageState extends State<ItineraryPage> {
       setState(() {
         _showMap = true;
         _mapCenter = LatLng(item.lat!, item.lng!);
-        _mapZoom = 14.0;
+        _mapZoom = 18.0;
       });
       _mainMapController.move(_mapCenter, _mapZoom);
       _snack('Focused map on ${item.controller.text.isEmpty ? "Item" : item.controller.text}');
@@ -694,7 +694,7 @@ class _ItineraryPageState extends State<ItineraryPage> {
   @override
   Widget build(BuildContext context) {
     final buttonStyle = OutlinedButton.styleFrom(
-      foregroundColor: _p.ink,
+      foregroundColor: _p.card,
       side: BorderSide(color: _p.ink, width: 2),
     );
 
@@ -726,105 +726,112 @@ class _ItineraryPageState extends State<ItineraryPage> {
     }
 
     final ref = context.screenWidth;
+    final isKeyboardVisible = MediaQuery.of(context).viewInsets.bottom > 0;
 
     return Theme(
       data: _theme,
       child: Scaffold(
-        floatingActionButton: FloatingActionButton.extended(
-          onPressed: _addDay,
-          icon: const Icon(Icons.add),
-          label: const Text('Add day'),
-        ),
-        body: Center(
-          child: Padding(
-            padding: AppResponsive.isDesktop(context) ? EdgeInsetsGeometry.fromLTRB(ref*0.1, 12, ref*0.1, 12) : EdgeInsetsGeometry.all(2),
-            child: Column(
-              children: [
-                const SizedBox(height: 12),
-                Text(
-                  'Build your Itinerary',
-                  style: TextStyle(
-                    color: _p.ink,
-                    fontSize: AppResponsive.titleSize(context),
-                    fontWeight: FontWeight.w900,
-                    letterSpacing: 2.5,
-                  ),
-                ),
-
-                ConstrainedBox(
-                  constraints: const BoxConstraints(maxWidth: 600),
-                  child: Padding(
-                    padding: const EdgeInsets.symmetric(horizontal: 16),
-                    child: TextField(
-                      controller: _titleController,
-                      textAlign: TextAlign.center,
-                      style: TextStyle(
-                        color: _p.ink,
-                        fontSize: 20,
-                        fontWeight: FontWeight.bold,
-                      ),
-                      decoration: InputDecoration(
-                        hintText: 'Name your trip…  e.g. Tokyo 2027',
-                        hintStyle: TextStyle(color: _p.ink.withOpacity(0.4)),
-                        border: InputBorder.none,
-                      ),
+        floatingActionButton: isKeyboardVisible
+            ? null
+            : FloatingActionButton.extended(
+                onPressed: _addDay,
+                icon: const Icon(Icons.add),
+                label: const Text('Add day'),
+              ),
+        body: SingleChildScrollView(
+          child: Center(
+            child: Padding(
+              padding: AppResponsive.isDesktop(context)
+                  ? EdgeInsets.fromLTRB(ref * 0.1, 12, ref * 0.1, 96)
+                  : const EdgeInsets.fromLTRB(8, 8, 8, 96),
+              child: Column(
+                children: [
+                  const SizedBox(height: 12),
+                  Text(
+                    'Build your Itinerary',
+                    style: TextStyle(
+                      color: _p.ink,
+                      fontSize: AppResponsive.titleSize(context),
+                      fontWeight: FontWeight.w900,
+                      letterSpacing: 2.5,
                     ),
                   ),
-                ),
 
-                Wrap(
-                  spacing: 8,
-                  children: [
-                    OutlinedButton.icon(
-                      style: buttonStyle,
-                      onPressed: _exportCsvFile,
-                      icon: const Icon(Icons.download, size: 18),
-                      label: const Text('Export CSV File'),
-                    ),
-                    OutlinedButton.icon(
-                      style: buttonStyle,
-                      onPressed: _importCsvFile,
-                      icon: const Icon(Icons.upload_file, size: 18),
-                      label: const Text('Import CSV File'),
-                    ),
-                    OutlinedButton.icon(
-                      style: buttonStyle,
-                      onPressed: () => setState(() => _showMap = !_showMap),
-                      icon: Icon(_showMap ? Icons.map_outlined : Icons.map, size: 18),
-                      label: Text(_showMap ? 'Hide Map' : 'Show Map'),
-                    ),
-                  ],
-                ),
-                const SizedBox(height: 10),
-
-                if (_showMap)
-                  Center(
-                    child: WireFrame(
-                      height: context.screenHeight * 0.3,
-                      margin: const EdgeInsets.symmetric(horizontal: 16),
-                      child: ClipRRect(
-                        borderRadius: BorderRadius.circular(10),
-                        child: FlutterMap(
-                          mapController: _mainMapController,
-                          options: MapOptions(
-                            initialCenter: _mapCenter,
-                            initialZoom: _mapZoom,
-                          ),
-                          children: [
-                            TileLayer(
-                              urlTemplate: 'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
-                              userAgentPackageName: 'com.example.app',
-                            ),
-                            MarkerLayer(markers: markers),
-                          ],
+                  ConstrainedBox(
+                    constraints: const BoxConstraints(maxWidth: 600),
+                    child: Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: 16),
+                      child: TextField(
+                        controller: _titleController,
+                        textAlign: TextAlign.center,
+                        style: TextStyle(
+                          color: _p.ink,
+                          fontSize: 20,
+                          fontWeight: FontWeight.bold,
+                        ),
+                        decoration: InputDecoration(
+                          hintText: 'Name your trip…  e.g. Tokyo 2027',
+                          hintStyle: TextStyle(color: _p.ink.withOpacity(0.4)),
+                          border: InputBorder.none,
                         ),
                       ),
-                    )
+                    ),
                   ),
-                const SizedBox(height: 10),
-                Expanded(
-                  child: ListView.separated(
-                    padding: const EdgeInsets.fromLTRB(16, 8, 16, 96),
+
+                  Wrap(
+                    spacing: 8,
+                    children: [
+                      OutlinedButton.icon(
+                        style: buttonStyle,
+                        onPressed: _exportCsvFile,
+                        icon: const Icon(Icons.download, size: 18),
+                        label: const Text('Export CSV File'),
+                      ),
+                      OutlinedButton.icon(
+                        style: buttonStyle,
+                        onPressed: _importCsvFile,
+                        icon: const Icon(Icons.upload_file, size: 18),
+                        label: const Text('Import CSV File'),
+                      ),
+                      OutlinedButton.icon(
+                        style: buttonStyle,
+                        onPressed: () => setState(() => _showMap = !_showMap),
+                        icon: Icon(_showMap ? Icons.map_outlined : Icons.map, size: 18),
+                        label: Text(_showMap ? 'Hide Map' : 'Show Map'),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 10),
+
+                  if (_showMap)
+                    Center(
+                      child: WireFrame(
+                        height: context.screenHeight * 0.3,
+                        margin: const EdgeInsets.symmetric(horizontal: 16),
+                        child: ClipRRect(
+                          borderRadius: BorderRadius.circular(10),
+                          child: FlutterMap(
+                            mapController: _mainMapController,
+                            options: MapOptions(
+                              initialCenter: _mapCenter,
+                              initialZoom: _mapZoom,
+                            ),
+                            children: [
+                              TileLayer(
+                                urlTemplate: 'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
+                                userAgentPackageName: 'com.example.app',
+                              ),
+                              MarkerLayer(markers: markers),
+                            ],
+                          ),
+                        ),
+                      ),
+                    ),
+                  const SizedBox(height: 10),
+                  ListView.separated(
+                    shrinkWrap: true,
+                    physics: const NeverScrollableScrollPhysics(),
+                    padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
                     itemCount: _days.length,
                     separatorBuilder: (_, __) => const SizedBox(height: 12),
                     itemBuilder: (context, i) {
@@ -871,8 +878,8 @@ class _ItineraryPageState extends State<ItineraryPage> {
                       );
                     },
                   ),
-                ),
-              ],
+                ],
+              ),
             ),
           ),
         ),
@@ -1006,13 +1013,13 @@ class _DayCardState extends State<_DayCard> {
       child: Stack(
         children: [
           Positioned(
-            left: 44,
+            left: 6,
             top: 0,
             bottom: 0,
             child: Container(width: 1.5, color: const Color.fromARGB(102, 245, 24, 0)),
           ),
           Padding(
-            padding: const EdgeInsets.fromLTRB(56, 14, 12, 14),
+            padding: const EdgeInsets.fromLTRB(12, 14, 12, 14),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
@@ -1090,6 +1097,7 @@ class _DayCardState extends State<_DayCard> {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               SizedBox(
                 width: 32,
@@ -1105,7 +1113,9 @@ class _DayCardState extends State<_DayCard> {
                 child: TextField(
                   controller: item.controller,
                   focusNode: item.focus,
-                  textInputAction: TextInputAction.next,
+                  textInputAction: TextInputAction.newline,
+                  minLines: 1,
+                  maxLines: null,
                   onSubmitted: (_) => _addAfter(index),
                   style: style.copyWith(
                     fontSize: isParent ? 16 : 15,
@@ -1122,28 +1132,6 @@ class _DayCardState extends State<_DayCard> {
                   ),
                 ),
               ),
-              if (isParent) ...[
-                if (item.lat != null && item.lng != null) ...[
-                  _MiniButton(
-                    icon: Icons.map,
-                    color: Colors.blue,
-                    onTap: () => widget.onShowOnMap(item),
-                    tooltip: 'Show on Map',
-                  ),
-                  _MiniButton(
-                    icon: Icons.directions,
-                    color: Colors.green,
-                    onTap: () => widget.onGetDirections(item),
-                    tooltip: 'Get Directions',
-                  ),
-                ],
-                _MiniButton(
-                  icon: Icons.location_pin,
-                  color: item.lat != null ? Colors.red : ink.withOpacity(0.5),
-                  onTap: () => widget.onPickItemLocation(item),
-                  tooltip: 'Pin Location',
-                ),
-              ],
               _MiniButton(
                 icon: Icons.format_indent_decrease,
                 color: ink.withOpacity(0.6),
@@ -1164,12 +1152,42 @@ class _DayCardState extends State<_DayCard> {
               ),
             ],
           ),
-          if (isParent && item.locationName.isNotEmpty)
+          if (isParent)
             Padding(
               padding: const EdgeInsets.only(left: 32, bottom: 6),
-              child: Text(
-                '📍 ${item.locationName}',
-                style: TextStyle(fontSize: 12, color: Colors.red.shade700, fontWeight: FontWeight.w500),
+              child: Wrap(
+                spacing: 4,
+                runSpacing: 4,
+                children: [
+                  if (item.lat != null && item.lng != null) ...[
+                    ActionChip(
+                      avatar: const Icon(Icons.map, size: 16, color: Colors.blue),
+                      label: const Text('Show on Map', style: TextStyle(fontSize: 12)),
+                      onPressed: () => widget.onShowOnMap(item),
+                      visualDensity: VisualDensity.compact,
+                    ),
+                    ActionChip(
+                      avatar: const Icon(Icons.directions, size: 16, color: Colors.green),
+                      label: const Text('Directions', style: TextStyle(fontSize: 12)),
+                      onPressed: () => widget.onGetDirections(item),
+                      visualDensity: VisualDensity.compact,
+                    ),
+                  ],
+                  ActionChip(
+                    avatar: Icon(Icons.location_pin, size: 16, color: item.lat != null ? Colors.red : ink.withOpacity(0.5)),
+                    label: Text(item.lat != null ? 'Pinned' : 'Pin Location', style: TextStyle(fontSize: 12)),
+                    onPressed: () => widget.onPickItemLocation(item),
+                    visualDensity: VisualDensity.compact,
+                  ),
+                  if (item.locationName.isNotEmpty)
+                    Padding(
+                      padding: const EdgeInsets.only(top: 6, left: 4),
+                      child: Text(
+                        '📍 ${item.locationName}',
+                        style: TextStyle(fontSize: 12, color: Colors.red.shade700, fontWeight: FontWeight.w500),
+                      ),
+                    ),
+                ],
               ),
             ),
         ],
