@@ -420,6 +420,31 @@ class _ItineraryPageState extends State<ItineraryPage> {
       ..showSnackBar(SnackBar(content: Text(msg)));
   }
 
+  void _focusMapOnItem(ChecklistItem item) {
+    if (item.lat != null && item.lng != null) {
+      setState(() {
+        _showMap = true;
+        _mapCenter = LatLng(item.lat!, item.lng!);
+        _mapZoom = 14.0;
+      });
+      _mainMapController.move(_mapCenter, _mapZoom);
+      _snack('Focused map on ${item.controller.text.isEmpty ? "Item" : item.controller.text}');
+    } else {
+      _snack('Please pin a location for this item first.');
+    }
+  }
+
+  void _openItemDirections(ChecklistItem item) {
+    if (item.lat != null && item.lng != null) {
+      final url = 'https://www.google.com/maps/dir/?api=1&destination=${item.lat},${item.lng}';
+      if (kIsWeb) {
+        html.window.open(url, '_blank');
+      }
+    } else {
+      _snack('Please pin a location first to get directions.');
+    }
+  }
+
   void _exportCsvFile() {
     final rawTitle = _titleController.text.trim();
     final title = rawTitle.isEmpty ? 'Itinerary' : rawTitle;
@@ -841,6 +866,8 @@ class _ItineraryPageState extends State<ItineraryPage> {
                         onDelete: () => _removeDay(day),
                         onMinimize: () => setState(() => day.isMinimized = true),
                         onPickItemLocation: (item) => _openItemLocationPicker(item),
+                        onShowOnMap: (item) => _focusMapOnItem(item),
+                        onGetDirections: (item) => _openItemDirections(item),
                       );
                     },
                   ),
@@ -863,12 +890,16 @@ class _DayCard extends StatefulWidget {
     required this.onDelete,
     required this.onMinimize,
     required this.onPickItemLocation,
+    required this.onShowOnMap,
+    required this.onGetDirections,
   });
 
   final DayEntry day;
   final VoidCallback onDelete;
   final VoidCallback onMinimize;
   final ValueChanged<ChecklistItem> onPickItemLocation;
+  final ValueChanged<ChecklistItem> onShowOnMap;
+  final ValueChanged<ChecklistItem> onGetDirections;
 
   @override
   State<_DayCard> createState() => _DayCardState();
@@ -1091,13 +1122,28 @@ class _DayCardState extends State<_DayCard> {
                   ),
                 ),
               ),
-              if (isParent)
+              if (isParent) ...[
+                if (item.lat != null && item.lng != null) ...[
+                  _MiniButton(
+                    icon: Icons.map,
+                    color: Colors.blue,
+                    onTap: () => widget.onShowOnMap(item),
+                    tooltip: 'Show on Map',
+                  ),
+                  _MiniButton(
+                    icon: Icons.directions,
+                    color: Colors.green,
+                    onTap: () => widget.onGetDirections(item),
+                    tooltip: 'Get Directions',
+                  ),
+                ],
                 _MiniButton(
                   icon: Icons.location_pin,
                   color: item.lat != null ? Colors.red : ink.withOpacity(0.5),
                   onTap: () => widget.onPickItemLocation(item),
                   tooltip: 'Pin Location',
                 ),
+              ],
               _MiniButton(
                 icon: Icons.format_indent_decrease,
                 color: ink.withOpacity(0.6),
