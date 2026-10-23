@@ -21,7 +21,7 @@ class PortfolioPage extends StatefulWidget {
 
 class _PortfolioPageState extends State<PortfolioPage> {
   bool _isDark = false;
-  bool _showOptions = false; // toggle for floating container
+  bool _showOptions = false;
   AppTheme get _neoTheme => AppTheme(isDark: _isDark);
 
   // ── Theme (app_theme.dart) ─────────────────────────────
@@ -223,6 +223,16 @@ class _PortfolioPageState extends State<PortfolioPage> {
                         icon: Icons.fire_extinguisher,
                         label: 'HeatMaps',
                         route: '/heatmap',
+                      ),
+                      _menuItem(
+                        icon: Icons.api_outlined,
+                        label: 'Playground',
+                        route: '/apiplayground',
+                      ),
+                      _menuItem(
+                        icon: Icons.map_outlined,
+                        label: 'Itinerary builder',
+                        route: '/itinerary',
                       ),
                     ],
                   ),

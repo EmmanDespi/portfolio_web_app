@@ -1,9 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:portfolio/pages/api_playground_page.dart';
 import 'package:portfolio/pages/heatmap_page.dart';
+import 'package:portfolio/pages/itinerary_page.dart';
 import 'package:portfolio/pages/tournament_page.dart';
-import 'utils/globalData.dart';
-import 'package:shared_preferences/shared_preferences.dart';
 import 'package:go_router/go_router.dart';
 import 'orderpage.dart';
 import 'pages/portfolio_page.dart';
@@ -42,6 +42,14 @@ class MyApp extends StatelessWidget {
         GoRoute(
           path: '/heatmap',
           builder: (context, state) => const HeatmapPage(),
+        ),
+        GoRoute(
+          path: '/apiplayground',
+          builder: (context, state) => const ApiPlaygroundPage(),
+        ),
+        GoRoute(
+          path: '/itinerary',
+          builder: (context, state) => const ItineraryPage(),
         ),
       ],
     );

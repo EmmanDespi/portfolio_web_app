@@ -3,9 +3,10 @@ import 'package:flutter/material.dart';
 
 abstract final class AppColors {
   static const ink = Color(0xFF171713);
-  static const paper = Color.fromARGB(255, 243, 238, 222);
+  static const paper = Color.fromARGB(255, 231, 225, 205);
   static const white = Color(0xFFFFFEFA);
   static const lime = Color(0xFFD7F34A);
+  static const mustard = Color(0xFFFFBF00);
   static const coral = Color(0xFFEF6249);
   static const muted = Color(0xFF77766F);
   static const line = Color(0xFFBCB9AE);
@@ -184,20 +185,23 @@ class AppPalette extends ThemeExtension<AppPalette> {
     required this.card,
     required this.chip,
     required this.ink,
-    required this.shadow,
+    required this.shadow, 
+    required this.paper,
   });
 
   final Color background; // page background
   final Color shell; // outer dashboard container
   final Color card; // inner cards / panels
+  final Color paper; // inner cards / panels
   final Color chip; // chips
   final Color ink; // text, borders, dividers
   final Color shadow; // hard offset shadows
 
   static const light = AppPalette(
-    background: AppColors.oatcream,
+    background: AppColors.coral,
     shell: AppColors.paper,
     card: AppColors.oatmilk,
+    paper: AppColors.mustard,
     chip: AppColors.white,
     ink: AppColors.ink,
     shadow: AppColors.ink,
@@ -207,6 +211,7 @@ class AppPalette extends ThemeExtension<AppPalette> {
     background: AppColors.ink,
     shell: AppColors.onyx,
     card: AppColors.dsBlue,
+    paper: AppColors.dsBlue,
     chip: AppColors.onyx,
     ink: AppColors.paper,
     shadow: Colors.black,
@@ -217,6 +222,7 @@ class AppPalette extends ThemeExtension<AppPalette> {
     Color? background,
     Color? shell,
     Color? card,
+    Color? paper,
     Color? chip,
     Color? ink,
     Color? shadow,
@@ -225,6 +231,7 @@ class AppPalette extends ThemeExtension<AppPalette> {
         background: background ?? this.background,
         shell: shell ?? this.shell,
         card: card ?? this.card,
+        paper: paper ?? this.paper,
         chip: chip ?? this.chip,
         ink: ink ?? this.ink,
         shadow: shadow ?? this.shadow,
@@ -237,6 +244,7 @@ class AppPalette extends ThemeExtension<AppPalette> {
       background: Color.lerp(background, other.background, t)!,
       shell: Color.lerp(shell, other.shell, t)!,
       card: Color.lerp(card, other.card, t)!,
+      paper: Color.lerp(paper, other.paper, t)!,
       chip: Color.lerp(chip, other.chip, t)!,
       ink: Color.lerp(ink, other.ink, t)!,
       shadow: Color.lerp(shadow, other.shadow, t)!,
@@ -399,6 +407,57 @@ class NeoAvatar extends StatelessWidget {
                 ),
               ),
             ),
+    );
+  }
+}
+
+class WireFrame extends StatelessWidget {
+  final Widget child;
+  final double? width;
+  final double? height;
+  final EdgeInsetsGeometry? padding;
+  final EdgeInsetsGeometry? margin;
+  final Color? color;
+  final BorderRadiusGeometry? borderRadius;
+  final BoxBorder? border;
+  final BoxShadow? boxShadow;
+  final AppTheme? theme;
+
+  const WireFrame({
+    super.key,
+    required this.child,
+    this.width,
+    this.height,
+    this.padding,
+    this.margin,
+    this.color,
+    this.borderRadius,
+    this.border,
+    this.boxShadow,
+    this.theme
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+        width: width,
+        height: height,
+        padding: padding ?? const EdgeInsets.all(12),
+        margin: margin ?? const EdgeInsets.all(4),
+        decoration: BoxDecoration(
+          color: color ?? AppColors.oatmilk,
+          borderRadius: borderRadius ?? BorderRadius.circular(12),
+          border: border ?? Border.all(color: AppColors.ink, width: 2),
+          boxShadow: [
+              boxShadow ??
+              BoxShadow(
+                color: AppColors.ink,
+                offset: const Offset(4, 4),
+                blurRadius: 0,
+              ),
+          ],
+        ),
+        child: child,
     );
   }
 }
