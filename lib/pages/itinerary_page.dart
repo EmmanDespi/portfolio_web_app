@@ -556,7 +556,7 @@ class _ItineraryPageState extends State<ItineraryPage> {
           contentPadding: const EdgeInsets.all(2),
           content: WireFrame(
             width: AppResponsive.isDesktop(context) ? context.screenWidth * 0.4 : context.screenWidth,
-            height: AppResponsive.isDesktop(context) ? context.screenHeight * 0.5 : context.screenHeight * 0.7,
+            height: AppResponsive.isDesktop(context) ? context.screenHeight * 0.5 : context.screenHeight * 0.8,
             child: Column(
               children: [
                 Row(
