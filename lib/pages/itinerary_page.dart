@@ -18,8 +18,15 @@ const int _maxIndent = 4;
 // ─────────────────────────── Data models ───────────────────────────
 
 class ChecklistItem {
-  ChecklistItem({String text = '', this.done = false, this.indent = 0})
-      : controller = TextEditingController(text: text),
+  ChecklistItem({
+    String text = '',
+    this.done = false,
+    this.indent = 0,
+    this.lat,
+    this.lng,
+    this.locationName = '',
+  })  : controller = TextEditingController(text: text),
+        locationController = TextEditingController(text: locationName),
         focus = FocusNode();
 
   factory ChecklistItem.fromJson(Map<String, dynamic> j) {
@@ -28,22 +35,33 @@ class ChecklistItem {
       text: (j['text'] ?? '').toString(),
       done: j['done'] == true,
       indent: rawIndent is num ? rawIndent.toInt().clamp(0, _maxIndent) : 0,
+      lat: j['lat'] as double?,
+      lng: j['lng'] as double?,
+      locationName: (j['locationName'] ?? '').toString(),
     );
   }
 
   bool done;
   int indent;
+  double? lat;
+  double? lng;
+  String locationName;
   final TextEditingController controller;
+  final TextEditingController locationController;
   final FocusNode focus;
 
   Map<String, dynamic> toJson() => {
         'text': controller.text,
         'done': done,
         'indent': indent,
+        'lat': lat,
+        'lng': lng,
+        'locationName': locationController.text,
       };
 
   void dispose() {
     controller.dispose();
+    locationController.dispose();
     focus.dispose();
   }
 }
@@ -61,36 +79,27 @@ class DayEntry {
     String title = '',
     String notes = '',
     List<ChecklistItem>? items,
-    this.lat,
-    this.lng,
-    this.locationName = '',
     this.isMinimized = false,
   })  : titleController = TextEditingController(text: title),
         notesController = TextEditingController(text: notes),
-        locationController = TextEditingController(text: locationName),
         items = (items == null || items.isEmpty) ? [ChecklistItem()] : items;
 
   final TextEditingController titleController;
   final TextEditingController notesController;
-  final TextEditingController locationController;
   final List<ChecklistItem> items;
   
-  double? lat;
-  double? lng;
-  String locationName;
   bool isMinimized;
 
   void dispose() {
     titleController.dispose();
     notesController.dispose();
-    locationController.dispose();
     for (final i in items) {
       i.dispose();
     }
   }
 }
 
-// ─────────────────────────── CSV Serialization (with Location) ───────────────────────────
+// ─────────────────────────── CSV Serialization (with Item Location) ───────────────────────────
 
 class _ImportResult {
   _ImportResult(this.title, this.days);
@@ -112,11 +121,11 @@ class ItineraryCodec {
   static String toCsvString(String title, List<DayEntry> days) {
     final lines = <String>['T,${_field(title)}'];
     for (final d in days) {
-      final latStr = d.lat?.toString() ?? '';
-      final lngStr = d.lng?.toString() ?? '';
-      lines.add('D,${_field(d.titleController.text)},${_field(d.notesController.text)},$latStr,$lngStr,${_field(d.locationController.text)}');
+      lines.add('D,${_field(d.titleController.text)},${_field(d.notesController.text)}');
       for (final i in d.items) {
-        lines.add('I,${_field(i.controller.text)},${i.done ? 1 : 0},${i.indent}');
+        final latStr = i.lat?.toString() ?? '';
+        final lngStr = i.lng?.toString() ?? '';
+        lines.add('I,${_field(i.controller.text)},${i.done ? 1 : 0},${i.indent},$latStr,$lngStr,${_field(i.locationController.text)}');
       }
     }
     return lines.join('\n');
@@ -136,9 +145,6 @@ class ItineraryCodec {
 
     String? dayTitle;
     var dayNotes = '';
-    double? lat;
-    double? lng;
-    var locName = '';
     var items = <ChecklistItem>[];
 
     void flushDay() {
@@ -148,15 +154,9 @@ class ItineraryCodec {
         title: dayTitle!,
         notes: dayNotes,
         items: items,
-        lat: lat,
-        lng: lng,
-        locationName: locName,
       ));
       dayTitle = null;
       dayNotes = '';
-      lat = null;
-      lng = null;
-      locName = '';
       items = <ChecklistItem>[];
     }
 
@@ -173,9 +173,6 @@ class ItineraryCodec {
           flushDay();
           dayTitle = col(r, 1);
           dayNotes = col(r, 2);
-          lat = double.tryParse(col(r, 3));
-          lng = double.tryParse(col(r, 4));
-          locName = col(r, 5);
           recognised = true;
           break;
         case 'I':
@@ -184,6 +181,9 @@ class ItineraryCodec {
             text: col(r, 1),
             done: col(r, 2) == '1',
             indent: (int.tryParse(col(r, 3)) ?? 0).clamp(0, _maxIndent),
+            lat: double.tryParse(col(r, 4)),
+            lng: double.tryParse(col(r, 5)),
+            locationName: col(r, 6),
           ));
           recognised = true;
           break;
@@ -420,33 +420,6 @@ class _ItineraryPageState extends State<ItineraryPage> {
       ..showSnackBar(SnackBar(content: Text(msg)));
   }
 
-  // Focus main map on a specific day's location
-  void _focusMapOnDay(DayEntry day) {
-    if (day.lat != null && day.lng != null) {
-      setState(() {
-        _showMap = true;
-        _mapCenter = LatLng(day.lat!, day.lng!);
-        _mapZoom = 14.0;
-      });
-      _mainMapController.move(_mapCenter, _mapZoom);
-      _snack('Focused map on ${day.titleController.text.isEmpty ? "Day" : day.titleController.text}');
-    } else {
-      _snack('Please pin a location for this day first.');
-    }
-  }
-
-  // Open external Google Maps directions to target location
-  void _openDirections(DayEntry day) {
-    if (day.lat != null && day.lng != null) {
-      final url = 'https://www.google.com/maps/dir/?api=1&destination=${day.lat},${day.lng}';
-      if (kIsWeb) {
-        html.window.open(url, '_blank');
-      }
-    } else {
-      _snack('Please pin a location first to get directions.');
-    }
-  }
-
   void _exportCsvFile() {
     final rawTitle = _titleController.text.trim();
     final title = rawTitle.isEmpty ? 'Itinerary' : rawTitle;
@@ -499,13 +472,15 @@ class _ItineraryPageState extends State<ItineraryPage> {
           ..clear()
           ..addAll(newDays);
 
-        final firstLocation = newDays.firstWhere(
-          (d) => d.lat != null && d.lng != null,
-          orElse: () => DayEntry(),
-        );
-        if (firstLocation.lat != null && firstLocation.lng != null) {
-          _mapCenter = LatLng(firstLocation.lat!, firstLocation.lng!);
-          _mainMapController.move(_mapCenter, 10.0);
+        // Find first item with location to center map
+        for (final d in newDays) {
+          for (final i in d.items) {
+            if (i.lat != null && i.lng != null) {
+              _mapCenter = LatLng(i.lat!, i.lng!);
+              _mainMapController.move(_mapCenter, 10.0);
+              break;
+            }
+          }
         }
       });
       WidgetsBinding.instance.addPostFrameCallback((_) {
@@ -519,12 +494,12 @@ class _ItineraryPageState extends State<ItineraryPage> {
     }
   }
 
-  Future<void> _openLocationPicker(DayEntry day) async {
-    LatLng initialCenter = (day.lat != null && day.lng != null)
-        ? LatLng(day.lat!, day.lng!)
+  Future<void> _openItemLocationPicker(ChecklistItem item) async {
+    LatLng initialCenter = (item.lat != null && item.lng != null)
+        ? LatLng(item.lat!, item.lng!)
         : _mapCenter;
 
-    LatLng? selectedPoint = (day.lat != null && day.lng != null) ? initialCenter : null;
+    LatLng? selectedPoint = (item.lat != null && item.lng != null) ? initialCenter : null;
     final MapController mapController = MapController();
     final TextEditingController searchController = TextEditingController();
     List<Map<String, dynamic>> searchResults = [];
@@ -552,7 +527,7 @@ class _ItineraryPageState extends State<ItineraryPage> {
       builder: (ctx) => StatefulBuilder(
         builder: (context, setDialogState) => AlertDialog(
           backgroundColor: AppColors.coral,
-          title: Text('Pin Location for ${day.titleController.text.isEmpty ? "Day" : day.titleController.text}', style: TextStyle(color: AppColors.ink)),
+          title: Text('Pin Location for "${item.controller.text.isEmpty ? "Item" : item.controller.text}"', style: TextStyle(color: AppColors.ink)),
           contentPadding: const EdgeInsets.all(4),
           content: WireFrame(
             width: AppResponsive.isDesktop(context) ? context.screenWidth * 0.4 : context.screenWidth * 0.97,
@@ -608,7 +583,7 @@ class _ItineraryPageState extends State<ItineraryPage> {
 
                             setDialogState(() {
                               selectedPoint = point;
-                              day.locationController.text = displayName;
+                              item.locationController.text = displayName;
                               searchResults.clear();
                             });
 
@@ -655,7 +630,7 @@ class _ItineraryPageState extends State<ItineraryPage> {
                 ),
                 const SizedBox(height: 12),
                 TextField(
-                  controller: day.locationController,
+                  controller: item.locationController,
                   style: TextStyle(color: AppColors.ink),
                   decoration: InputDecoration(
                     labelText: 'Location Name / Label',
@@ -676,10 +651,9 @@ class _ItineraryPageState extends State<ItineraryPage> {
               onPressed: () {
                 if (selectedPoint != null) {
                   setState(() {
-                    day.lat = selectedPoint!.latitude;
-                    day.lng = selectedPoint!.longitude;
-                    day.locationName = day.locationController.text;
-                    day.isMinimized = true;
+                    item.lat = selectedPoint!.latitude;
+                    item.lng = selectedPoint!.longitude;
+                    item.locationName = item.locationController.text;
                   });
                 }
                 Navigator.pop(ctx);
@@ -699,25 +673,32 @@ class _ItineraryPageState extends State<ItineraryPage> {
       side: BorderSide(color: _p.ink, width: 2),
     );
 
-    final markers = _days
-        .where((d) => d.lat != null && d.lng != null)
-        .map((d) => Marker(
-              point: LatLng(d.lat!, d.lng!),
+    // Gather all parent items with locations for map markers
+    final markers = <Marker>[];
+    for (final d in _days) {
+      for (final item in d.items) {
+        if (item.indent == 0 && item.lat != null && item.lng != null) {
+          markers.add(
+            Marker(
+              point: LatLng(item.lat!, item.lng!),
               width: 40,
               height: 40,
               child: GestureDetector(
                 onTap: () {
                   setState(() {
-                    d.isMinimized = !d.isMinimized;
+                    d.isMinimized = false;
                   });
                 },
-                child: const Tooltip(
-                  message: 'Click to toggle card',
-                  child: Icon(Icons.location_pin, color: Colors.red, size: 40),
+                child: Tooltip(
+                  message: item.locationName.isNotEmpty ? item.locationName : item.controller.text,
+                  child: const Icon(Icons.location_pin, color: Colors.red, size: 40),
                 ),
               ),
-            ))
-        .toList();
+            ),
+          );
+        }
+      }
+    }
 
     final ref = context.screenWidth;
 
@@ -846,10 +827,6 @@ class _ItineraryPageState extends State<ItineraryPage> {
                                   day.titleController.text.isEmpty ? 'Day ${i + 1}' : day.titleController.text,
                                   style: TextStyle(fontWeight: FontWeight.bold, color: _p.ink),
                                 ),
-                                if (day.locationName.isNotEmpty) ...[
-                                  Text(' • ', style: TextStyle(color: _p.ink.withOpacity(0.5))),
-                                  Text(day.locationName, style: TextStyle(color: _p.ink.withOpacity(0.7))),
-                                ],
                                 const Spacer(),
                                 Icon(Icons.unfold_more, size: 18, color: _p.ink),
                               ],
@@ -862,10 +839,8 @@ class _ItineraryPageState extends State<ItineraryPage> {
                         key: ObjectKey(day),
                         day: day,
                         onDelete: () => _removeDay(day),
-                        onPickLocation: () => _openLocationPicker(day),
                         onMinimize: () => setState(() => day.isMinimized = true),
-                        onShowOnMap: () => _focusMapOnDay(day),
-                        onGetDirections: () => _openDirections(day),
+                        onPickItemLocation: (item) => _openItemLocationPicker(item),
                       );
                     },
                   ),
@@ -886,18 +861,14 @@ class _DayCard extends StatefulWidget {
     super.key,
     required this.day,
     required this.onDelete,
-    required this.onPickLocation,
     required this.onMinimize,
-    required this.onShowOnMap,
-    required this.onGetDirections,
+    required this.onPickItemLocation,
   });
 
   final DayEntry day;
   final VoidCallback onDelete;
-  final VoidCallback onPickLocation;
   final VoidCallback onMinimize;
-  final VoidCallback onShowOnMap;
-  final VoidCallback onGetDirections;
+  final ValueChanged<ChecklistItem> onPickItemLocation;
 
   @override
   State<_DayCard> createState() => _DayCardState();
@@ -957,8 +928,7 @@ class _DayCardState extends State<_DayCard> {
   }
 
   void _addAfter(int index) {
-    final base = index >= 0 ? day.items[index].indent : 0;
-    final item = ChecklistItem(indent: base);
+    final item = ChecklistItem(indent: 0);
     _wire(item);
     setState(() => day.items.insert(index + 1, item));
     WidgetsBinding.instance
@@ -1029,26 +999,6 @@ class _DayCardState extends State<_DayCard> {
                         ),
                       ),
                     ),
-                    if (day.lat != null && day.lng != null) ...[
-                      IconButton(
-                        tooltip: 'Show on Map',
-                        icon: Icon(Icons.map, color: p.ink),
-                        onPressed: widget.onShowOnMap,
-                      ),
-                      IconButton(
-                        tooltip: 'Get Directions',
-                        icon: Icon(Icons.directions, color: p.ink),
-                        onPressed: widget.onGetDirections,
-                      ),
-                    ],
-                    IconButton(
-                      tooltip: 'Pin on Map',
-                      icon: Icon(
-                        Icons.location_pin,
-                        color: day.lat != null ? p.ink : p.ink.withOpacity(0.5),
-                      ),
-                      onPressed: widget.onPickLocation,
-                    ),
                     IconButton(
                       tooltip: 'Minimize to Bubble',
                       icon: Icon(Icons.unfold_less, color: p.ink.withOpacity(0.5)),
@@ -1062,14 +1012,6 @@ class _DayCardState extends State<_DayCard> {
                     ),
                   ],
                 ),
-                if (day.locationName.isNotEmpty)
-                  Padding(
-                    padding: const EdgeInsets.only(bottom: 6),
-                    child: Text(
-                      '📍 ${day.locationName}',
-                      style: TextStyle(fontSize: 13, color: p.ink, fontWeight: FontWeight.w500),
-                    ),
-                  ),
                 Divider(color: line, height: 8),
 
                 for (var i = 0; i < day.items.length; i++)
@@ -1105,57 +1047,85 @@ class _DayCardState extends State<_DayCard> {
     );
   }
 
-  Widget _buildItem(ChecklistItem item, int index, TextStyle style, Color line,
-      Color ink) {
-    final focused = item.focus.hasFocus;
+  Widget _buildItem(ChecklistItem item, int index, TextStyle style, Color line, Color ink) {
+    final isParent = item.indent == 0;
 
     return Container(
       decoration: BoxDecoration(
         border: Border(bottom: BorderSide(color: line)),
       ),
       padding: EdgeInsets.only(left: item.indent * 26.0),
-      child: Row(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          SizedBox(
-            width: 32,
-            height: 36,
-            child: Checkbox(
-              value: item.done,
-              visualDensity: VisualDensity.compact,
-              onChanged: (v) => setState(() => item.done = v ?? false),
-            ),
-          ),
-          Expanded(
-            child: TextField(
-              controller: item.controller,
-              focusNode: item.focus,
-              textInputAction: TextInputAction.next,
-              onSubmitted: (_) => _addAfter(index),
-              style: style.copyWith(
-                fontSize: item.indent == 0 ? 16 : 15,
-                decoration: item.done
-                    ? TextDecoration.lineThrough
-                    : TextDecoration.none,
-                color: item.done ? ink.withOpacity(0.45) : ink,
+          Row(
+            children: [
+              SizedBox(
+                width: 32,
+                height: 36,
+                child: Checkbox(
+                  value: item.done,
+                  visualDensity: VisualDensity.compact,
+                  shape: isParent ? null : const CircleBorder(),
+                  onChanged: (v) => setState(() => item.done = v ?? false),
+                ),
               ),
-              decoration: const InputDecoration(
-                border: InputBorder.none,
-                isDense: true,
-                contentPadding: EdgeInsets.symmetric(vertical: 8),
-                hintText: 'Plan something…',
+              Expanded(
+                child: TextField(
+                  controller: item.controller,
+                  focusNode: item.focus,
+                  textInputAction: TextInputAction.next,
+                  onSubmitted: (_) => _addAfter(index),
+                  style: style.copyWith(
+                    fontSize: isParent ? 16 : 15,
+                    decoration: item.done
+                        ? TextDecoration.lineThrough
+                        : TextDecoration.none,
+                    color: item.done ? ink.withOpacity(0.45) : ink,
+                  ),
+                  decoration: const InputDecoration(
+                    border: InputBorder.none,
+                    isDense: true,
+                    contentPadding: EdgeInsets.symmetric(vertical: 8),
+                    hintText: 'Plan something…',
+                  ),
+                ),
+              ),
+              if (isParent)
+                _MiniButton(
+                  icon: Icons.location_pin,
+                  color: item.lat != null ? Colors.red : ink.withOpacity(0.5),
+                  onTap: () => widget.onPickItemLocation(item),
+                  tooltip: 'Pin Location',
+                ),
+              _MiniButton(
+                icon: Icons.format_indent_decrease,
+                color: ink.withOpacity(0.6),
+                onTap: () {
+                  _changeIndent(item, -1);
+                  item.focus.requestFocus();
+                },
+                tooltip: 'Decrease Indent',
+              ),
+              _MiniButton(
+                icon: Icons.format_indent_increase,
+                color: ink.withOpacity(0.6),
+                onTap: () {
+                  _changeIndent(item, 1);
+                  item.focus.requestFocus();
+                },
+                tooltip: 'Increase Indent',
+              ),
+            ],
+          ),
+          if (isParent && item.locationName.isNotEmpty)
+            Padding(
+              padding: const EdgeInsets.only(left: 32, bottom: 6),
+              child: Text(
+                '📍 ${item.locationName}',
+                style: TextStyle(fontSize: 12, color: Colors.red.shade700, fontWeight: FontWeight.w500),
               ),
             ),
-          ),
-          if (focused) ...[
-            _MiniButton(
-              icon: Icons.format_indent_decrease,
-              onTap: () => _changeIndent(item, -1),
-            ),
-            _MiniButton(
-              icon: Icons.format_indent_increase,
-              onTap: () => _changeIndent(item, 1),
-            ),
-          ],
         ],
       ),
     );
@@ -1163,20 +1133,27 @@ class _DayCardState extends State<_DayCard> {
 }
 
 class _MiniButton extends StatelessWidget {
-  const _MiniButton({required this.icon, required this.onTap});
+  const _MiniButton({required this.icon, required this.onTap, this.color, this.tooltip});
 
   final IconData icon;
   final VoidCallback onTap;
+  final Color? color;
+  final String? tooltip;
 
   @override
   Widget build(BuildContext context) {
-    return InkWell(
+    Widget child = InkWell(
       onTap: onTap,
       borderRadius: BorderRadius.circular(6),
       child: Padding(
         padding: const EdgeInsets.all(6),
-        child: Icon(icon, size: 18),
+        child: Icon(icon, size: 18, color: color),
       ),
     );
+
+    if (tooltip != null) {
+      return Tooltip(message: tooltip!, child: child);
+    }
+    return child;
   }
 }
