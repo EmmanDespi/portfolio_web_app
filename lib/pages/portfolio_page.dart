@@ -234,6 +234,11 @@ class _PortfolioPageState extends State<PortfolioPage> {
                         label: 'Itinerary builder',
                         route: '/itinerary',
                       ),
+                      // _menuItem(
+                      //   icon: Icons.map_outlined,
+                      //   label: 'Grocery list builder',
+                      //   route: '/grocery',
+                      // ),
                     ],
                   ),
                 ),

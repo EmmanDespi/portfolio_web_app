@@ -261,30 +261,43 @@ abstract final class AppTheme {
   static TextTheme _textTheme(Color ink) => TextTheme(
         headlineLarge: TextStyle(
           color: ink,
-          fontSize: 42,
+          fontSize: 48,
           height: 0.98,
           fontWeight: FontWeight.w900,
+          letterSpacing: 2.5
         ),
         headlineMedium: TextStyle(
           color: ink,
-          fontSize: 28,
+          fontSize: 40,
           height: 1.0,
           fontWeight: FontWeight.w900,
+          letterSpacing: 2.5
+        ),
+        headlineSmall: TextStyle(
+          color: ink,
+          fontSize: 24,
+          height: 1.0,
+          fontWeight: FontWeight.w700,
+          letterSpacing: 2.5
         ),
         titleLarge: TextStyle(
           color: ink,
-          fontSize: 19,
-          fontWeight: FontWeight.w800,
+          fontSize: 24,
+          letterSpacing: 2
         ),
         bodyLarge: TextStyle(
           color: ink,
-          fontSize: 16,
+          fontSize: 20,
           height: 1.35,
+          letterSpacing: 2,
+          fontWeight: FontWeight.w700
         ),
         bodyMedium: TextStyle(
           color: ink,
-          fontSize: 14,
+          fontSize: 16,
           height: 1.35,
+          letterSpacing: 2,
+          fontWeight: FontWeight.w700
         ),
         labelLarge: TextStyle(
           color: ink,
@@ -415,6 +428,7 @@ class WireFrame extends StatelessWidget {
   final Widget child;
   final double? width;
   final double? height;
+  final double? minHeight;
   final EdgeInsetsGeometry? padding;
   final EdgeInsetsGeometry? margin;
   final Color? color;
@@ -428,6 +442,7 @@ class WireFrame extends StatelessWidget {
     required this.child,
     this.width,
     this.height,
+    this.minHeight,
     this.padding,
     this.margin,
     this.color,
@@ -442,6 +457,8 @@ class WireFrame extends StatelessWidget {
     return Container(
         width: width,
         height: height,
+        constraints:
+          minHeight != null ? BoxConstraints(minHeight: minHeight!) : null,
         padding: padding ?? const EdgeInsets.all(12),
         margin: margin ?? const EdgeInsets.all(4),
         decoration: BoxDecoration(
@@ -458,6 +475,123 @@ class WireFrame extends StatelessWidget {
           ],
         ),
         child: child,
+    );
+  }
+}
+
+class NeoButton extends StatefulWidget {
+  final String label;
+  final VoidCallback? onPressed;
+  final IconData? icon;
+  final Color? color;
+  final double shadowOffset;
+  final EdgeInsetsGeometry padding;
+
+  final double? width;
+  final double? height;
+  final double fontSize;
+  final double iconSize;
+
+  const NeoButton({
+    super.key,
+    required this.label,
+    this.onPressed,
+    this.icon,
+    this.color,
+    this.shadowOffset = 4,
+    this.padding = const EdgeInsets.symmetric(
+      horizontal: AppSpacing.md,
+      vertical: AppSpacing.sm,
+    ),
+    this.width,
+    this.height,
+    this.fontSize = 16,
+    this.iconSize = 22,
+  });
+
+  @override
+  State<NeoButton> createState() => _NeoButtonState();
+}
+
+class _NeoButtonState extends State<NeoButton> {
+  bool _pressed = false;
+  final bool _hovered = false;
+
+  bool get _enabled => widget.onPressed != null;
+
+  void _release() {
+    // Short delay so quick taps still show the push.
+    Future.delayed(const Duration(milliseconds: 90), () {
+      if (mounted) setState(() => _pressed = false);
+    });
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final p = context.palette;
+    final o = widget.shadowOffset;
+
+    // Resting: lifted. Hovered: slightly pressed. Pressed: flat on the page.
+    final double shift = _pressed ? o : (_hovered ? o / 2 : 0);
+    final double shadow = o - shift;
+
+    final base = widget.color ?? p.paper;
+    final bg = _enabled ? base : p.chip.withValues(alpha: 0.6);
+    final fg = _enabled ? p.ink : p.ink.withValues(alpha: 0.4);
+
+    return MouseRegion(
+      cursor: _enabled ? SystemMouseCursors.click : SystemMouseCursors.basic,
+      // onEnter: (_) => setState(() => _hovered = true),
+      // onExit: (_) => setState(() => _hovered = false),
+      child: GestureDetector(
+        behavior: HitTestBehavior.opaque,
+        onTapDown: _enabled ? (_) => setState(() => _pressed = true) : null,
+        onTapUp: _enabled ? (_) => _release() : null,
+        onTapCancel: _enabled ? _release : null,
+        onTap: widget.onPressed,
+        child: AnimatedContainer(
+          duration: const Duration(milliseconds: 70),
+          curve: Curves.easeOut,
+          width: widget.width,
+          height: widget.height,
+          alignment: (widget.width != null || widget.height != null)
+              ? Alignment.center
+              : null,
+          transform: Matrix4.translationValues(shift, shift, 0),
+          padding: widget.padding,
+          decoration: BoxDecoration(
+            color:  bg,
+            borderRadius: BorderRadius.circular(12),
+            border: Border.all(color: p.ink, width: 2),
+            boxShadow: [
+              BoxShadow(
+                color: p.shadow,
+                offset: Offset(shadow, shadow),
+                blurRadius: 0,
+              ),
+            ],
+          ),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              if (widget.icon != null) ...[
+                Icon(widget.icon, size: widget.iconSize, color: fg),
+                SizedBox(width: widget.fontSize * 0.5),
+              ],
+              Text(
+                widget.label.toUpperCase(),
+                style: Theme.of(context).textTheme.labelLarge!.copyWith(
+                      color: fg,
+                      fontSize: widget.fontSize,
+                      fontWeight: FontWeight.bold,
+                      letterSpacing: 1.5,
+                    ),
+              ),
+            ],
+          ),
+        ),
+      ),
     );
   }
 }

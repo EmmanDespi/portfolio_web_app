@@ -4,6 +4,7 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:file_picker/file_picker.dart';
+import 'package:go_router/go_router.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:universal_html/html.dart' as html;
 import 'package:flutter_map/flutter_map.dart';
@@ -253,6 +254,7 @@ class ItineraryPage extends StatefulWidget {
 class _ItineraryPageState extends State<ItineraryPage> {
   bool _isDark = false;
   bool _showMap = true;
+  bool _showOptions = false;
 
   final TextEditingController _titleController = TextEditingController();
   final List<DayEntry> _days = [DayEntry(title: 'Day 1')];
@@ -266,6 +268,11 @@ class _ItineraryPageState extends State<ItineraryPage> {
 
   ThemeData get _theme => _isDark ? _darkTheme : _lightTheme;
   AppPalette get _p => _theme.extension<AppPalette>()!;
+
+  Border get _border => Border.all(color: _p.ink, width: 2);
+
+  BoxShadow _hardShadow(double offset) =>
+      BoxShadow(color: _p.shadow, offset: Offset(offset, offset), blurRadius: 0);
 
   @override
   void initState() {
@@ -289,6 +296,25 @@ class _ItineraryPageState extends State<ItineraryPage> {
     final prefs = await SharedPreferences.getInstance();
     if (!mounted) return;
     setState(() => _isDark = prefs.getBool('isDark') ?? false);
+  }
+
+  Widget _menuItem({
+    required IconData icon,
+    required String label,
+    required String route,
+  }) {
+    return ListTile(
+      leading: Icon(icon),
+      title: Text(
+        label,
+        style: const TextStyle(
+          fontSize: 14,
+          fontWeight: FontWeight.w800,
+          letterSpacing: 2.5,
+        ),
+      ),
+      onTap: () => context.go(route),
+    );
   }
 
   Future<void> _promptDestinationOnLoad() async {
@@ -349,7 +375,7 @@ class _ItineraryPageState extends State<ItineraryPage> {
                         onPressed: isSearching ? null : () => searchCountry(searchController.text),
                         child: isSearching
                             ? const SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2))
-                            : Text('Search', style: TextStyle(color: _p.ink)),
+                            : Text('Search', style: TextStyle(color: _p.paper)),
                       ),
                     ],
                   ),
@@ -733,12 +759,29 @@ class _ItineraryPageState extends State<ItineraryPage> {
       child: Scaffold(
         floatingActionButton: isKeyboardVisible
             ? null
-            : FloatingActionButton.extended(
-                onPressed: _addDay,
-                icon: const Icon(Icons.add),
-                label: const Text('Add day'),
+            : Row(
+                mainAxisAlignment: MainAxisAlignment.end,
+                children: [
+                  FloatingActionButton(
+                    onPressed: _addDay,
+                    child: Icon(Icons.add),
+                  ),
+                  SizedBox(width: 12,),
+                  FloatingActionButton(
+                  child: Icon(_showOptions ? Icons.close : Icons.menu),
+                  onPressed: () {
+                    setState(() {
+                      _showOptions = !_showOptions;
+                    });
+                  },
+                ),
+                ],
               ),
-        body: SingleChildScrollView(
+        body: Stack(
+        children: [
+          SizedBox(
+          height: context.screenHeight,
+          child: SingleChildScrollView(
           child: Center(
             child: Padding(
               padding: AppResponsive.isDesktop(context)
@@ -806,7 +849,7 @@ class _ItineraryPageState extends State<ItineraryPage> {
                   if (_showMap)
                     Center(
                       child: WireFrame(
-                        height: context.screenHeight * 0.3,
+                        height: context.screenHeight * 0.4,
                         margin: const EdgeInsets.symmetric(horizontal: 16),
                         child: ClipRRect(
                           borderRadius: BorderRadius.circular(10),
@@ -884,6 +927,55 @@ class _ItineraryPageState extends State<ItineraryPage> {
           ),
         ),
       ),
+      if (_showOptions)
+        Positioned(
+          bottom: 80,
+          right: 20,
+          child: WireFrame(
+            width: 220,
+            color: _p.card,
+            padding: const EdgeInsets.all(12),
+            border: _border,
+            boxShadow: _hardShadow(4),
+            borderRadius: BorderRadius.circular(12),
+            child: Material(
+              type: MaterialType.transparency,
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  _menuItem(
+                    icon: Icons.emoji_events,
+                    label: 'Home',
+                    route: '/',
+                  ),
+                    _menuItem(
+                    icon: Icons.api_outlined,
+                    label: 'Tournament',
+                    route: '/tournament',
+                  ),
+                  _menuItem(
+                    icon: Icons.fire_extinguisher,
+                    label: 'HeatMaps',
+                    route: '/heatmap',
+                  ),
+                  _menuItem(
+                    icon: Icons.map_outlined,
+                    label: 'Playground',
+                    route: '/apiplayground',
+                  ),
+                  // _menuItem(
+                  //   icon: Icons.map_outlined,
+                  //   label: 'Grocery list builder',
+                  //   route: '/grocery',
+                  // ),
+                ],
+              ),
+            ),
+          ),
+        ),
+        ]
+        )  
+      )
     );
   }
 }

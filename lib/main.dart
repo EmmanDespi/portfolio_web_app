@@ -1,10 +1,12 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:portfolio/pages/api_playground_page.dart';
+import 'package:portfolio/pages/cart_page.dart';
 import 'package:portfolio/pages/heatmap_page.dart';
 import 'package:portfolio/pages/itinerary_page.dart';
 import 'package:portfolio/pages/tournament_page.dart';
 import 'package:go_router/go_router.dart';
+import 'package:portfolio/utils/app_theme.dart';
 import 'orderpage.dart';
 import 'pages/portfolio_page.dart';
 
@@ -21,7 +23,7 @@ class MyApp extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final GoRouter _router = GoRouter(
+    final GoRouter router = GoRouter(
       routes: [
         GoRoute(
           path: '/',
@@ -51,15 +53,22 @@ class MyApp extends StatelessWidget {
           path: '/itinerary',
           builder: (context, state) => const ItineraryPage(),
         ),
+        GoRoute(
+          path: '/grocery',
+          builder: (context, state) => const GroceryCartPage(),
+        ),
       ],
     );
 
+    final ThemeData lightTheme = AppTheme.portfolio(isDark: false);
+    final ThemeData darkTheme = AppTheme.portfolio(isDark: true);
+
     return MaterialApp.router(
-      routerConfig: _router,
+      routerConfig: router,
       title: 'Portfolio',
-      theme: ThemeData(
-        colorScheme: ColorScheme.fromSeed(seedColor: Colors.deepPurple),
-      ),
+      theme: darkTheme,       // Applied when system is in Light Mode
+      darkTheme: lightTheme,    // Applied when system is in Dark Mode
+      themeMode: ThemeMode.system,
     );
   }
 }

@@ -2,6 +2,7 @@ import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:portfolio/utils/heatmap/brutal.dart';
 import 'package:portfolio/utils/heatmap/heat_data.dart';
@@ -20,13 +21,37 @@ class HeatmapPage extends ConsumerStatefulWidget {
 
 class _HeatmapPageState extends ConsumerState<HeatmapPage> {
   bool _isDark = false;
-
+  bool _showOptions = false;
   // ── Theme (app_theme.dart) ─────────────────────────────
   static final ThemeData _lightTheme = AppTheme.portfolio(isDark: false);
   static final ThemeData _darkTheme = AppTheme.portfolio(isDark: true);
 
   ThemeData get _theme => _isDark ? _darkTheme : _lightTheme;
   AppPalette get _p => _theme.extension<AppPalette>()!;
+
+  Border get _border => Border.all(color: _p.ink, width: 2);
+
+  BoxShadow _hardShadow(double offset) =>
+      BoxShadow(color: _p.shadow, offset: Offset(offset, offset), blurRadius: 0);
+
+   Widget _menuItem({
+    required IconData icon,
+    required String label,
+    required String route,
+  }) {
+    return ListTile(
+      leading: Icon(icon),
+      title: Text(
+        label,
+        style: const TextStyle(
+          fontSize: 14,
+          fontWeight: FontWeight.w800,
+          letterSpacing: 2.5,
+        ),
+      ),
+      onTap: () => context.go(route),
+    );
+  }
 
   @override
   void initState() {
@@ -69,52 +94,111 @@ class _HeatmapPageState extends ConsumerState<HeatmapPage> {
     );
 
     final isDesktop = context.isDesktop;
-    final shellWidth = math.min(context.screenWidth * 0.95, 1200.0);
-    final shadow = isDesktop ? 8.0 : 4.0;
+    final dashboardWidth = AppResponsive.dashboardWidth(context);
 
     return Theme(
       data: _theme,
       child: Scaffold(
         backgroundColor: _p.background,
-        body: SingleChildScrollView(
-          child: Center(
-            child: Container(
-              width: shellWidth,
-              margin: EdgeInsets.fromLTRB(
-                0,
-                42,
-                0,
-                isDesktop ? AppSpacing.md : AppSpacing.sm,
-              ),
-              padding: const EdgeInsets.all(AppSpacing.sm),
-              decoration: BoxDecoration(
-                color: _p.shell,
-                borderRadius: BorderRadius.circular(12),
-                border: Border.all(color: _p.ink, width: 2),
-                boxShadow: [
-                  BoxShadow(
-                    color: _p.shadow,
-                    offset: Offset(shadow, shadow),
-                    blurRadius: 0,
-                  ),
-                ],
-              ),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  _header(weather, weatherAsync.isLoading),
-                  const SizedBox(height: AppSpacing.md),
-                  geoAsync.when(
-                    loading: () => const _Centered(child: CircularProgressIndicator()),
-                    error: (e, _) => _Centered(
-                      child: Text('Could not load the map data.', style: _small),
+        body: Stack(
+        children: [
+          SizedBox(
+            height: context.screenHeight,
+            child: Center(
+              child: SingleChildScrollView(
+                child:Column(
+                  children: [
+                    const SizedBox(height: 42),
+                    WireFrame( 
+                      color: _p.shell,
+                      width: dashboardWidth,
+                      margin: EdgeInsets.fromLTRB(
+                        0,
+                        42,
+                        0,
+                        isDesktop ? AppSpacing.md : AppSpacing.sm,
+                      ),
+                      padding: const EdgeInsets.all(AppSpacing.sm),
+                      border: Border.all(color: _p.ink, width: 2),
+                      borderRadius: BorderRadius.circular(12),
+                      boxShadow: _hardShadow(4),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        _header(weather, weatherAsync.isLoading),
+                        const SizedBox(height: AppSpacing.md),
+                        geoAsync.when(
+                          loading: () => const _Centered(child: CircularProgressIndicator()),
+                          error: (e, _) => _Centered(
+                            child: Text('Could not load the map data.', style: _small),
+                          ),
+                          data: (geo) => _content(geo, weather?.readings ?? const {}),
+                        ),
+                      ],
                     ),
-                    data: (geo) => _content(geo, weather?.readings ?? const {}),
                   ),
-                ],
+                  const SizedBox(height: 280),
+                ]
               ),
-            ),
+            )
+          )
+        ),
+        if (_showOptions)
+              Positioned(
+                bottom: 80,
+                right: 20,
+                child: WireFrame(
+                  width: 220,
+                  color: _p.card,
+                  padding: const EdgeInsets.all(12),
+                  border: _border,
+                  boxShadow: _hardShadow(4),
+                  borderRadius: BorderRadius.circular(12),
+                  child: Material(
+                    type: MaterialType.transparency,
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        _menuItem(
+                          icon: Icons.emoji_events,
+                          label: 'Home',
+                          route: '/',
+                        ),
+                        _menuItem(
+                          icon: Icons.fire_extinguisher,
+                          label: 'Tournament',
+                          route: '/tournament',
+                        ),
+                        _menuItem(
+                          icon: Icons.api_outlined,
+                          label: 'Playground',
+                          route: '/apiplayground',
+                        ),
+                        _menuItem(
+                          icon: Icons.map_outlined,
+                          label: 'Itinerary builder',
+                          route: '/itinerary',
+                        ),
+                        // _menuItem(
+                        //   icon: Icons.map_outlined,
+                        //   label: 'Grocery list builder',
+                        //   route: '/grocery',
+                        // ),
+                      ],
+                    ),
+                  ),
+                ),
+              ),
+            ]
           ),
+          floatingActionButton: FloatingActionButton(
+          // colours, border and elevation come from AppTheme.portfolio
+          child: Icon(_showOptions ? Icons.close : Icons.menu),
+          onPressed: () {
+            setState(() {
+              _showOptions = !_showOptions;
+            });
+          },
         ),
       ),
     );

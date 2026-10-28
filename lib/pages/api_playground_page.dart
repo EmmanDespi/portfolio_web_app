@@ -1,6 +1,7 @@
 import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
+import 'package:go_router/go_router.dart';
 import 'package:portfolio/utils/widgets.dart';
 import 'package:portfolio/utils/widgets/globe.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -18,6 +19,7 @@ class ApiPlaygroundPage extends StatefulWidget {
 
 class _ApiPlaygroundPageState extends State<ApiPlaygroundPage> {
   bool _isDark = false;
+  bool _showOptions = false;
 
   static final ThemeData _lightTheme = app.AppTheme.portfolio(isDark: false);
   static final ThemeData _darkTheme = app.AppTheme.portfolio(isDark: true);
@@ -50,6 +52,25 @@ class _ApiPlaygroundPageState extends State<ApiPlaygroundPage> {
     });
   }
 
+  Widget _menuItem({
+    required IconData icon,
+    required String label,
+    required String route,
+  }) {
+    return ListTile(
+      leading: Icon(icon),
+      title: Text(
+        label,
+        style: const TextStyle(
+          fontSize: 14,
+          fontWeight: FontWeight.w800,
+          letterSpacing: 2.5,
+        ),
+      ),
+      onTap: () => context.go(route),
+    );
+  }
+
   @override
   void initState() {
     super.initState();
@@ -66,7 +87,11 @@ class _ApiPlaygroundPageState extends State<ApiPlaygroundPage> {
       data: _theme,
       child: Scaffold(
         backgroundColor: _bg,
-        body: SingleChildScrollView(
+        body: Stack(
+        children: [
+          SizedBox(
+          height: context.screenHeight,
+          child: SingleChildScrollView(
           padding: const EdgeInsets.fromLTRB(32, 24, 32, 24),
           child: Column(
             mainAxisSize: MainAxisSize.min,
@@ -106,6 +131,63 @@ class _ApiPlaygroundPageState extends State<ApiPlaygroundPage> {
               ),
             ],
           ),
+        )
+        ),
+        if (_showOptions)
+              Positioned(
+                bottom: 80,
+                right: 20,
+                child: WireFrame(
+                  width: 220,
+                  color: _p.card,
+                  padding: const EdgeInsets.all(12),
+                  border: _border,
+                  boxShadow: _hardShadow(4),
+                  borderRadius: BorderRadius.circular(12),
+                  child: Material(
+                    type: MaterialType.transparency,
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        _menuItem(
+                          icon: Icons.emoji_events,
+                          label: 'Home',
+                          route: '/',
+                        ),
+                         _menuItem(
+                          icon: Icons.api_outlined,
+                          label: 'Tournament',
+                          route: '/tournament',
+                        ),
+                        _menuItem(
+                          icon: Icons.fire_extinguisher,
+                          label: 'HeatMaps',
+                          route: '/heatmap',
+                        ),
+                        _menuItem(
+                          icon: Icons.map_outlined,
+                          label: 'Itinerary builder',
+                          route: '/itinerary',
+                        ),
+                        // _menuItem(
+                        //   icon: Icons.map_outlined,
+                        //   label: 'Grocery list builder',
+                        //   route: '/grocery',
+                        // ),
+                      ],
+                    ),
+                  ),
+                ),
+              ),
+            ]
+          ),
+          floatingActionButton: FloatingActionButton(
+          child: Icon(_showOptions ? Icons.close : Icons.menu),
+          onPressed: () {
+            setState(() {
+              _showOptions = !_showOptions;
+            });
+          },
         ),
       ),
     );
